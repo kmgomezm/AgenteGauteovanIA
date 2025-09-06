@@ -1,12 +1,43 @@
-# Agente de Opinión 🇨🇴 (2018–2020) — RAG Híbrido (Local, OSS)
+# Contexto
+En los últimos años Colombia experimentó transformaciones sociales, políticas y económicas reflejadas en la opinión pública. En el proyecto _Humanidades digitales y esfera pública_ se recopilaron ~13k columnas de opinión de periódicos colombianos (2018–2020).
+- **Problema**: Los métodos tradicionales de análisis de opinión son insuficientes para procesar grandes volúmenes de texto, extraer insights profundos con respuestas contextualizadas.
+- **Solución**: Un agente conversacional autónomo que combina:
+  - Análisis de sentimientos (detección de sarcasmo, emociones complejas).
+  - Generación de informes contextuales basados en RAG para evitar alucinaciones .
+  - Visualización interactiva de tendencias de opinión.
+- **Público Objetivo**: Periodistas, investigadores sociales, entidades gubernamentales y organizaciones de la sociedad civil.
 
-Proyecto base para un agente conversacional (Streamlit + LangChain + Ollama) que analiza ~13k columnas de opinión de periódicos colombianos (2018–2020).  
-**100% local** (CPU ok), con **FAISS + BM25**, **citas** y herramientas de **NLP** (sentimiento, NER, clasificación).
+# Agente Gauteovan IA
+
+Ese proyecto propone la base para un agente conversacional multimodal, que integra análisis de texto con generación de visualizaciones (gráficos, word clouds) y resúmenes. Es **100% local** (requisitos mínimos: 16 GB RAM | Intel core i5).
+
+> Gauteovan es la diosa de todas las cosas en la cultura Tairona
+
+## *Arquitectura del Sistema*
+
+```mermaid
+graph TD
+    A[Usuario] --> B[Interfaz Web: Streamlit]
+    B --> C[Backend: Agente LangChain]
+    C --> D[Procesamiento de Consultas]
+    D --> E[Retrieval: FAISS Vector Store]
+    D --> F[LLM local: llama3.1]
+    E --> G[Base de Conocimiento: Embeddings e5-small]
+    F --> H[Generación de Respuestas con RAG]
+    H --> I[Análisis de Sentimientos: HF + spaCy]
+    H --> J[Generación de Visualizaciones]
+    I --> K[Respuesta Multimodal]
+    J --> K
+    K --> B
+```
+
 
 ## 🚀 Puesta en marcha (pasos mínimos)
 1) **Instala dependencias**
+Asegurate que que el directorio de trabajo está en el directorio de trabajo `cd C:\path\to\AgenteGauteovanIA`, una vez ahí crea el entorno virtual:
 ```bash
-python -m venv .venv && source .venv/bin/activate  # (Windows: .venv\Scripts\activate)
+python -m venv .venv 
+.venv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
 python -m spacy download es_core_news_lg
@@ -14,9 +45,7 @@ python -m spacy download es_core_news_lg
 2) **Instala Ollama** y modelos locales (en otra terminal):
 ```bash
 # https://ollama.com/download
-ollama pull mistral:7b-instruct
-# opcional:
-# ollama pull llama3.1:8b-instruct
+ollama pull llama3.1:8b-instruct
 ```
 3) **Coloca el Excel** en `data/raw/opiniones.xlsx` (con columnas: `autor, fecha, titulo, periódico/periodico, texto`).
 4) **Construye los índices** (ingesta + FAISS + BM25):

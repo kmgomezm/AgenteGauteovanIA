@@ -7,6 +7,6 @@ st.write("Carga el parquet procesado para explorar conteos.")
 uploaded = st.file_uploader("Sube chunks.parquet", type=["parquet"])
 if uploaded:
     df = pd.read_parquet(uploaded)
-    by = st.selectbox("Agrupar por", ["periodico","autor"])
+    by = st.selectbox("Agrupar por", ["diario","autor"])
     fig = plot_counts(df, by=by)
     st.pyplot(fig)

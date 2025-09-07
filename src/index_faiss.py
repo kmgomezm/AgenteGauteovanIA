@@ -14,7 +14,7 @@ def build_faiss(parquet="data/processed/chunks.parquet",
     index.add(X)
     Path(out_index).parent.mkdir(parents=True, exist_ok=True)
     faiss.write_index(index, out_index)
-    df[["chunk_id","doc_id","autor","fecha","periodico","titulo"]].to_parquet(out_meta, index=False)
+    df[["chunk_id","doc_id","autor","fecha","diario","título"]].to_parquet(out_meta, index=False)
 
 if __name__ == "__main__":
     build_faiss()

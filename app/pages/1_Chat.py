@@ -15,4 +15,4 @@ if q:
         st.write(ans)
         with st.expander("Fuentes"):
             for _, r in hits.iterrows():
-                st.markdown(f"- **{r.titulo}** — {r.autor}, *{r.periodico}*, {str(r.fecha)[:10]}  \n`{r.doc_id}`")
+                st.markdown(f"- **{r.título}** — {r.autor}, *{r.diario}*, {str(r.fecha)[:10]}  \n`{r.doc_id}`")

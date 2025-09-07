@@ -11,6 +11,6 @@ k = st.slider("Documentos a mostrar", 1, 20, 8)
 if st.button("Buscar"):
     hits = searcher.search(query, final_k=k)
     st.dataframe(hits)
-    col = st.selectbox("Graficar conteos por…", ["periodico","autor"]) 
+    col = st.selectbox("Graficar conteos por…", ["diario","autor"]) 
     fig = plot_counts(hits, by=col)
     st.pyplot(fig)

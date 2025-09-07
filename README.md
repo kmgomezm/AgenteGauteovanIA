@@ -40,6 +40,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
+pip install ollama langchain langchain-community duckduckgo-search pandas
 python -m spacy download es_core_news_lg
 ```
 2) **Instala Ollama** y modelos locales (en otra terminal):
@@ -47,12 +48,17 @@ python -m spacy download es_core_news_lg
 # https://ollama.com/download
 ollama pull llama3.1:8b-instruct
 ```
-3) **Coloca el Excel** en `data/raw/Corpus_completo_revisado.xlsx` (con columnas: `autor, fecha, titulo, diario, texto`).
-4) **Construye los índices** (ingesta + FAISS + BM25):
+3) **Construye los índices** 
+1. Ingesta: Lee el excel, lo limpia, divide en `chunks` sobrepuestos y guarda en un `.parket` con metadata: `'doc_id', 'autor', 'fecha', 'diario', 'título', 'vínculo', 'row_idx', 'chunk', 'chunk_id'`
+2. FAISS: Crea el índice vectorial con FAISS para búsqueda semántica, usando embeddings de `multilingual-e5-small`. Guarda el indice vectorial en `data/indexes/faiss.index` y los respectivos metadatos por `chunk`
+3.  BM25: Crear el índice léxico tipo BM25 para búsqueda por keywords.
+
+
 ```bash
 python scripts/build_index.py
 ```
 5) **Lanza la app**
+
 ```bash
 streamlit run app/streamlit_app.py
 ```

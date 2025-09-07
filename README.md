@@ -47,7 +47,7 @@ python -m spacy download es_core_news_lg
 # https://ollama.com/download
 ollama pull llama3.1:8b-instruct
 ```
-3) **Coloca el Excel** en `data/raw/opiniones.xlsx` (con columnas: `autor, fecha, titulo, periódico/periodico, texto`).
+3) **Coloca el Excel** en `data/raw/Corpus_completo_revisado.xlsx` (con columnas: `autor, fecha, titulo, diario, texto`).
 4) **Construye los índices** (ingesta + FAISS + BM25):
 ```bash
 python scripts/build_index.py

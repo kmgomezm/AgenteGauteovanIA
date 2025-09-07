@@ -1,15 +1,13 @@
 from pathlib import Path
 from uuid import uuid4
 import pandas as pd
-from .utils import clean_text, to_date
+from utils import clean_text, to_date
+
 
 def load_and_chunk(xlsx_path, out_parquet="data/processed/chunks.parquet", 
                    chunk_size=450, overlap=80):
     df = pd.read_excel(xlsx_path)
     df = df.rename(columns={c: c.lower() for c in df.columns})
-    # compatibilidad periodico/periódico
-    if 'periódico' not in df and 'periodico' in df:
-        df['periódico'] = df['periodico']
 
     rows = []
     for i, r in df.iterrows():
@@ -19,8 +17,9 @@ def load_and_chunk(xlsx_path, out_parquet="data/processed/chunks.parquet",
             "doc_id": doc_id,
             "autor": r.get('autor',''),
             "fecha": to_date(r.get('fecha', None)),
-            "periodico": r.get('periódico',''),
-            "titulo": r.get('titulo',''),
+            "diario": r.get('diario',''),
+            "título": str(r.get('título','')),
+            "vínculo": r.get('vínculo',''),
             "row_idx": i
         }
         words = str(text).split()
@@ -40,4 +39,4 @@ def load_and_chunk(xlsx_path, out_parquet="data/processed/chunks.parquet",
     return out
 
 if __name__ == "__main__":
-    load_and_chunk("data/raw/opiniones.xlsx")
+    load_and_chunk(r"data\raw\Corpus_completo_revisado.xlsx")

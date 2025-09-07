@@ -1,5 +1,5 @@
 # Contexto
-En los últimos años Colombia experimentó transformaciones sociales, políticas y económicas reflejadas en la opinión pública. En el proyecto _Humanidades digitales y esfera pública_ se recopilaron ~13k columnas de opinión de periódicos colombianos (2018–2020).
+En los últimos años Colombia experimentó transformaciones sociales, políticas y económicas reflejadas en la opinión pública. En el proyecto _Humanidades digitales y esfera pública_ de la Universidad EAFIT se recopilaron ~13k columnas de opinión de periódicos colombianos (2018–2020).
 - **Problema**: Los métodos tradicionales de análisis de opinión son insuficientes para procesar grandes volúmenes de texto, extraer insights profundos con respuestas contextualizadas.
 - **Solución**: Un agente conversacional autónomo que combina:
   - Análisis de sentimientos (detección de sarcasmo, emociones complejas).
@@ -40,6 +40,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
+pip install ollama langchain langchain-community duckduckgo-search pandas
 python -m spacy download es_core_news_lg
 ```
 2) **Instala Ollama** y modelos locales (en otra terminal):
@@ -47,12 +48,17 @@ python -m spacy download es_core_news_lg
 # https://ollama.com/download
 ollama pull llama3.1:8b-instruct
 ```
-3) **Coloca el Excel** en `data/raw/opiniones.xlsx` (con columnas: `autor, fecha, titulo, periódico/periodico, texto`).
-4) **Construye los índices** (ingesta + FAISS + BM25):
+3) **Construye los índices** 
+1. Ingesta: Lee el excel, lo limpia, divide en `chunks` sobrepuestos y guarda en un `.parket` con metadata: `'doc_id', 'autor', 'fecha', 'diario', 'título', 'vínculo', 'row_idx', 'chunk', 'chunk_id'`
+2. FAISS: Crea el índice vectorial con FAISS para búsqueda semántica, usando embeddings de `multilingual-e5-small`. Guarda el indice vectorial en `data/indexes/faiss.index` y los respectivos metadatos por `chunk`
+3.  BM25: Crear el índice léxico tipo BM25 para búsqueda por keywords.
+
+
 ```bash
 python scripts/build_index.py
 ```
 5) **Lanza la app**
+
 ```bash
 streamlit run app/streamlit_app.py
 ```
@@ -68,7 +74,7 @@ colombia-opinion-agent/
 │     ├─ 3_Analisis_NLP.py
 │     └─ 4_Reportes_y_Graficas.py
 ├─ data/
-│  ├─ raw/opiniones.xlsx        # (pon aquí tu archivo)
+│  ├─ raw/Corpus_completo_revisado.xlsx      # (pon aquí tu archivo)
 │  ├─ processed/chunks.parquet  # (generado)
 │  └─ indexes/
 │      ├─ faiss.index           # (generado)

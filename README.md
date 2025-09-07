@@ -68,7 +68,7 @@ colombia-opinion-agent/
 │     ├─ 3_Analisis_NLP.py
 │     └─ 4_Reportes_y_Graficas.py
 ├─ data/
-│  ├─ raw/opiniones.xlsx        # (pon aquí tu archivo)
+│  ├─ raw/Corpus_completo_revisado.xlsx      # (pon aquí tu archivo)
 │  ├─ processed/chunks.parquet  # (generado)
 │  └─ indexes/
 │      ├─ faiss.index           # (generado)

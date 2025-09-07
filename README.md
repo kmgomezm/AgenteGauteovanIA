@@ -1,5 +1,5 @@
 # Contexto
-En los últimos años Colombia experimentó transformaciones sociales, políticas y económicas reflejadas en la opinión pública. En el proyecto _Humanidades digitales y esfera pública_ se recopilaron ~13k columnas de opinión de periódicos colombianos (2018–2020).
+En los últimos años Colombia experimentó transformaciones sociales, políticas y económicas reflejadas en la opinión pública. En el proyecto _Humanidades digitales y esfera pública_ de la Universidad EAFIT se recopilaron ~13k columnas de opinión de periódicos colombianos (2018–2020).
 - **Problema**: Los métodos tradicionales de análisis de opinión son insuficientes para procesar grandes volúmenes de texto, extraer insights profundos con respuestas contextualizadas.
 - **Solución**: Un agente conversacional autónomo que combina:
   - Análisis de sentimientos (detección de sarcasmo, emociones complejas).

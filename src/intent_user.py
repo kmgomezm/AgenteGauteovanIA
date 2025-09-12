@@ -1,10 +1,7 @@
 # src/intent.py
 from typing import Tuple
+import re
 
-WEB_TOKENS = {
-    "#web", "#buscarweb", "#usarweb", "buscar en la web", "busca en la web",
-    "usa web", "usar web", "con web", "web:", "web ->"
-}
 
 def parse_user_intent(question: str) -> Tuple[str, bool]:
     """
@@ -17,12 +14,16 @@ def parse_user_intent(question: str) -> Tuple[str, bool]:
     q_norm = question.strip()
     low = q_norm.lower()
 
-    allow = any(tok in low for tok in WEB_TOKENS)
+    # Detecta si la pregunta contiene ('web' o 'internet') y ('busca' o 'usa')
 
-    # Limpia tokens comunes si están embebidos al inicio o final
+    allow = False
     cleaned = q_norm
-    for tok in WEB_TOKENS:
-        cleaned = cleaned.replace(tok, "")
-    cleaned = " ".join(cleaned.split())
-
+    # Patrones para detectar intención de usar web/internet
+    pattern = re.compile(r"(?i)(web|internet).*(busca|usa)|(busca|usa).*(web|internet)")
+    if pattern.search(low):
+        allow = True
+        # Limpia las palabras clave detectadas
+        cleaned = re.sub(r"(?i)\b(web|internet)\b", "", cleaned)
+        cleaned = re.sub(r"(?i)\b(busca|usa)\b", "", cleaned)
+        cleaned = " ".join(cleaned.split())
     return cleaned, allow

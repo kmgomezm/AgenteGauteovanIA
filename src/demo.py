@@ -1,6 +1,6 @@
 # src/main_demo.py
 import os
-from .rag_pipeline import RAGHybridPipeline
+from .rag_chain import RAGHybridPipeline
 
 def main():
     pipeline = RAGHybridPipeline(
@@ -8,7 +8,7 @@ def main():
         temperature=float(os.getenv("LLM_TEMP", "0.2"))
     )
 
-    print("Escribe tu pregunta. Para permitir búsqueda web, añade el token #web (p.ej. '... #web').")
+    print("Escribe tu pregunta. Para permitir búsqueda web indicalo explícitamente').")
     q = input("Pregunta: ").strip()
 
     result = pipeline.answer(q, k_local=8, min_local_chars=600, k_web=6)

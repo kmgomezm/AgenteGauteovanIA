@@ -5,7 +5,7 @@ from duckduckgo_search import DDGS
 def web_search_duckduckgo(
     query: str,
     max_results: int = 6,
-    region: str = "wt-wt",
+    region: str = "co-es", #para Colombia o usar wt-wt para resultados globales
     safesearch: str = "off",
 ) -> List[Dict[str, Any]]:
     """

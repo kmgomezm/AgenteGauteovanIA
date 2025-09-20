@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 import pandas as pd
-from utils import clean_text, to_date
+from .utils import clean_text, to_date
 
 
 def load_and_chunk(xlsx_path, out_parquet="data/processed/chunks.parquet", 

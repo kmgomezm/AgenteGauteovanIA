@@ -12,7 +12,7 @@ class HybridSearcher:
                  parquet_chunks="data/processed/chunks.parquet"):
         self.df_meta = pd.read_parquet(faiss_meta)
         self.faiss = faiss.read_index(faiss_index)
-        self.model = SentenceTransformer("intfloat/multilingual-e5-small")
+        self.model = SentenceTransformer("intfloat/multilingual-e5-small", device="cpu")
         with open(bm25_path, "rb") as f:
             obj = pickle.load(f)
         self.bm25, self.bm25_chunk_ids = obj["bm25"], obj["chunk_ids"]
@@ -35,5 +35,19 @@ class HybridSearcher:
                        key=lambda x: x[1], reverse=True)[:final_k]
         cids = [cid for cid,_ in fused]
         meta = self.df_meta.set_index("chunk_id").loc[cids].reset_index()
-        meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in cids]
+
+
+        #meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in cids]
+
+        try:
+            meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in cids]
+        except KeyError as e:
+            print(f"ID faltante: {e}")
+        # Filtrar solo los IDs válidos
+        valid_cids = [cid for cid in cids if cid in self.chunks.index]
+        meta = meta[meta["chunk_id"].isin(valid_cids)].reset_index(drop=True)
+        meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in meta["chunk_id"]]
+
+        ##
+
         return meta

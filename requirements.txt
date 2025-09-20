@@ -11,4 +11,7 @@ langchain-community>=0.2.7
 ollama>=0.3.0
 streamlit>=1.35.0
 matplotlib>=3.8.0
-duckduckgo-search
+openpyxl>=3.1.0
+torch==2.4.1
+duckduckgo-search>=8.1.1
+

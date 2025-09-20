@@ -1,33 +1,64 @@
-# src/rag_pipeline.py
+# src/rag_chain.py
 from typing import Optional, Dict, Any
-
 import pandas as pd
-from langchain_community.llms import Ollama
-from langchain.memory import ConversationBufferWindowMemory
-
-from .utils import _evidence_sufficient
-from .prompts import SYSTEM_LOCAL, SYSTEM_WEB, PROMPT
-from .briefings import structured_briefs
-from .formatting import format_evidence_local, format_evidence_web
-from .intent_user import parse_user_intent
-from .web_search import web_search_duckduckgo
-
-# Tu buscador híbrido (debes tenerlo implementado en el proyecto)
+from langchain_ollama import OllamaLLM as Ollama
+from langchain.prompts import PromptTemplate
 from .search_hybrid import HybridSearcher
+from .prompts import SYSTEM_LOCAL, PROMPT, format_evidence
+
+
+class RAGPipeline:
+    """Pipeline RAG simple para consultas con evidencia local"""
+    
+    def __init__(self, model="llama3.2:3b", temperature=0.2):
+        self.llm = Ollama(model=model, temperature=temperature)
+        self.searcher = HybridSearcher()
+
+    def answer(self, question: str, k: int = 8):
+        """
+        Responde una pregunta usando evidencia local de la base de datos.
+        
+        Args:
+            question: La pregunta a responder
+            k: Número de documentos a recuperar
+            
+        Returns:
+            Tuple de (respuesta, hits_dataframe)
+        """
+        # Buscar evidencia relevante
+        hits = self.searcher.search(question, final_k=k)
+        
+        if hits is None or hits.empty:
+            return "No se encontró evidencia relevante para responder la pregunta.", pd.DataFrame()
+        
+        # Formatear evidencia para el prompt
+        evidence = format_evidence(hits)
+        
+        # Crear prompt con evidencia
+        prompt = PROMPT.format(
+            system=SYSTEM_LOCAL, 
+            question=question, 
+            evidence=evidence
+        )
+        
+        # Generar respuesta
+        answer = self.llm.invoke(prompt)
+        
+        return answer, hits
 
 
 class RAGHybridPipeline:
     """
-    Flujo: RAG local -> (opcional) Fallback Web (solo si el usuario lo pide).
-    Devuelve un dict con respuesta + modo + evidencia usada.
+    Pipeline RAG híbrido con fallback web (versión más avanzada).
+    Flujo: RAG local -> (opcional) Fallback Web si el usuario lo solicita.
     """
+    
     def __init__(
         self,
-        model: str = "llama3.1:8b",
+        model: str = "llama3.2:3b",
         temperature: float = 0.2,
         searcher: Optional[HybridSearcher] = None,
     ):
-        self.memory = ConversationBufferWindowMemory(k=5, return_messages=True)
         self.llm = Ollama(model=model, temperature=temperature)
         self.searcher = searcher or HybridSearcher()
 
@@ -36,86 +67,65 @@ class RAGHybridPipeline:
         question: str,
         k_local: int = 8,
         min_local_chars: int = 400,
-        k_web: int = 6,
-        allow_web: Optional[bool] = None,
-        use_deep_reason: bool = False,  # Nuevo argumento para razonamiento profundo
+        allow_web: bool = False,
     ) -> Dict[str, Any]:
         """
-        - Primero intenta responder con evidencia LOCAL.
-        - Si la evidencia local es insuficiente:
-            - Solo hace fallback a WEB si allow_web=True (o si el usuario lo indicó en la pregunta).
-            - Si allow_web=False: responde que no encontró suficiente evidencia local y sugiere activar web.
+        Responde usando evidencia local, con fallback web opcional.
+        
+        Args:
+            question: La pregunta a responder
+            k_local: Número de documentos locales a recuperar
+            min_local_chars: Mínimo de caracteres para considerar evidencia suficiente
+            allow_web: Si permitir búsqueda web como fallback
+            
+        Returns:
+            Dict con respuesta, modo usado, evidencia, etc.
         """
-        # 1) Intención del usuario (si no llega allow_web True)
-        clean_question, intent_allow_web = parse_user_intent(question)
-        if allow_web is None: # Si no se especifica, usar la intención del usuario
-            allow_web = intent_allow_web # Esta puede ser True o False
-
-        # 2) RAG local
-        hits = self.searcher.search(clean_question, final_k=k_local)
-        # Ajustar min_local_chars y k_local para determinar qué tan "suficiente" es suficiente
-        if _evidence_sufficient(hits, min_total_chars=min_local_chars):
-            evidence = format_evidence_local(hits, enumerate_chunks=True)
-            briefs = None
-            if use_deep_reason:
-                briefs = structured_briefs(clean_question, evidence)
-                # Puedes ajustar el formato de briefs según lo que espera el LLM
-                import json
-                evidence = json.dumps(briefs, ensure_ascii=False, indent=2)
-            prompt = PROMPT.format(system=SYSTEM_LOCAL, question=clean_question, evidence=evidence)
-            answer = self.llm.invoke(prompt)
-            # Guardar en memoria si está habilitada
-            if hasattr(self, "memory") and self.memory is not None:
-                self.memory.save_context({"input": clean_question}, {"output": answer})
-            return {
-                "mode": "local_deep_reason" if use_deep_reason else "local",
-                "answer": answer,
-                "evidence_text": evidence,
-                "hits": hits.to_dict(orient="records"),
-                "allow_web": allow_web,
-                "briefs": briefs if use_deep_reason else None,
-            }
-
-        # 3) ¿Debe activar Web?
+        
+        # 1) RAG local
+        hits = self.searcher.search(question, final_k=k_local)
+        
+        # Verificar si la evidencia local es suficiente
+        if hits is not None and not hits.empty:
+            total_chars = sum(len(str(chunk)) for chunk in hits.get('chunk', []))
+            
+            if total_chars >= min_local_chars:
+                evidence = format_evidence(hits)
+                prompt = PROMPT.format(
+                    system=SYSTEM_LOCAL, 
+                    question=question, 
+                    evidence=evidence
+                )
+                answer = self.llm.invoke(prompt)
+                
+                return {
+                    "mode": "local",
+                    "answer": answer,
+                    "evidence_text": evidence,
+                    "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
+                    "allow_web": allow_web,
+                }
+        
+        # 2) Si evidencia local insuficiente
         if not allow_web:
             return {
                 "mode": "local_insufficient",
                 "answer": (
                     "No encontré evidencia suficiente en la base local para responder con confianza. "
-                    "Indicame si quieres que intente buscar en internet, o activa allow_web=True."
+                    "Si deseas, puedes activar la búsqueda web con allow_web=True."
                 ),
                 "evidence_text": "",
                 "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
                 "allow_web": allow_web,
             }
-
-        # 4) Fallback Web (a petición del usuario)
-        web_results = web_search_duckduckgo(clean_question, max_results=k_web)
-        if not web_results:
-            return {
-                "mode": "web_none",
-                "answer": (
-                    "No encontré información confiable en resultados web para complementar la evidencia local."
-                ),
-                "evidence_text": "",
-                "web_results": [],
-                "allow_web": allow_web
-            }
-
-        evidence = format_evidence_web(web_results, enumerate_items=True)
-        prompt   = PROMPT.format(system=SYSTEM_WEB, question=clean_question, evidence=evidence)
-        answer   = self.llm.invoke(prompt)
-        # Guardar en memoria si está habilitada
-        if hasattr(self, "memory") and self.memory is not None:
-            self.memory.save_context({"input": clean_question}, {"output": answer})
-
+        
+        # 3) Fallback web (si está habilitado)
+        # Nota: Aquí irían las funciones de búsqueda web que no están implementadas aún
         return {
-            "mode": "web",
-            "answer": answer,
-            "evidence_text": evidence,
-            "web_results": web_results,
+            "mode": "web_not_implemented",
+            "answer": "La búsqueda web no está implementada aún. Usa solo la evidencia local disponible.",
+            "evidence_text": "",
+            "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
             "allow_web": allow_web,
         }
-
-    
 

@@ -12,7 +12,7 @@ class HybridSearcher:
                  parquet_chunks="data/processed/chunks.parquet"):
         self.df_meta = pd.read_parquet(faiss_meta)
         self.faiss = faiss.read_index(faiss_index)
-        self.model = SentenceTransformer("intfloat/multilingual-e5-small")
+        self.model = SentenceTransformer("intfloat/multilingual-e5-small", device="cpu")
         with open(bm25_path, "rb") as f:
             obj = pickle.load(f)
         self.bm25, self.bm25_chunk_ids = obj["bm25"], obj["chunk_ids"]

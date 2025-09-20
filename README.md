@@ -57,7 +57,23 @@ ollama pull llama3.1:8b-instruct
 ```bash
 python scripts/build_index.py
 ```
+
+4) **Demo**
+
+Puedes probar el agente desde la terminal ejecutando el demo interactivo. Este script permite hacer preguntas y ver la respuesta generada por el modelo, junto con el modo de búsqueda y un resumen de la evidencia utilizada.
+
+```bash
+python -m src.demo
+```
+
 5) **Lanza la app**
+
+La interfaz web (Streamlit) permite:
+- Escribir preguntas sobre las columnas de opinión.
+- Seleccionar, mediante una checklist, si quieres permitir búsqueda web y/o activar razonamiento profundo (resúmenes estructurados por facetas).
+> También puedes activar el modo web indicándolo explícitamente (por ej: 'Busca en la web', 'Usa internet'...)
+> Si no se indica, el modelo buscará por defecto en la base de conocimiento. Si no encuentra la respuesta allí, lo advertirá 
+- Visualizar la respuesta, las fuentes utilizadas y, si se activa, los resúmenes estructurados.
 
 ```bash
 streamlit run app/streamlit_app.py
@@ -74,26 +90,31 @@ colombia-opinion-agent/
 │     ├─ 3_Analisis_NLP.py
 │     └─ 4_Reportes_y_Graficas.py
 ├─ data/
-│  ├─ raw/Corpus_completo_revisado.xlsx      # (pon aquí tu archivo)
-│  ├─ processed/chunks.parquet  # (generado)
+│  ├─ raw/Corpus_completo_revisado.xlsx      
+│  ├─ processed/chunks.parquet  
 │  └─ indexes/
-│      ├─ faiss.index           # (generado)
-│      ├─ faiss_meta.parquet    # (generado)
-│      └─ bm25.pkl              # (generado; o sqlite.db si migras a FTS5)
+│      ├─ faiss.index          
+│      ├─ faiss_meta.parquet    
+│      └─ bm25.pkl              
 ├─ scripts/
 │  ├─ build_index.py
-│  └─ eval_rag.py               # (plantilla)
+│  └─ eval_rag.py      
 ├─ src/
 │  ├─ __init__.py
-│  ├─ ingest.py
-│  ├─ index_faiss.py
+│  ├─ briefings.py
+│  ├─ demo.py
+│  ├─ formatting.py
 │  ├─ index_bm25.py
-│  ├─ search_hybrid.py
-│  ├─ prompts.py
-│  ├─ rag_chain.py
+│  ├─ index_faiss.py
+│  ├─ ingest.py
+│  ├─ intent_user.py
 │  ├─ nlp_tools.py
 │  ├─ plots.py
-│  └─ utils.py
+│  ├─ prompts.py
+│  ├─ rag_chain.py
+│  ├─ search_hybrid.py
+│  ├─ utils.py
+│  └─ web_search.py
 ├─ tests/
 ├─ requirements.txt
 └─ README.md
@@ -106,7 +127,7 @@ colombia-opinion-agent/
 
 ## 📌 Notas
 - Este esqueleto corre **CPU-only**. Si tienes GPU, Transformers y Sentence-Transformers la aprovecharán.
-- Si tu Excel difiere, ajusta `src/ingest.py` (renombrado de columnas).
+
 - Para resultados más “seguros”, usa `temperature=0.2` en `rag_chain.py`.
 
 ## 🧪 Evaluación (rápida)

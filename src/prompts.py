@@ -14,6 +14,6 @@ Respuesta (español concisa, con citas):"""
 def format_evidence(df):
     rows = []
     for _, r in df.iterrows():
-        meta = f"[{r.autor}, {r.periodico}, {str(r.fecha)[:10]}, {r.titulo}, {r.doc_id}]"
+        meta = f"[{r.autor}, {r.diario}, {str(r.fecha)[:10]}, {r.título}, {r.doc_id}]"
         rows.append(f"- {r.chunk}\n  {meta}")
     return "\n".join(rows)

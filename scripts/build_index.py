@@ -4,7 +4,7 @@ from src.index_bm25 import build_bm25
 
 if __name__ == "__main__":
     print("[1/3] Ingesta y particionado…")
-    load_and_chunk("data/raw/opiniones.xlsx")
+    load_and_chunk("data/raw/Corpus_completo_revisado.xlsx")
     print("[2/3] Índice FAISS…")
     build_faiss()
     print("[3/3] Índice BM25…")

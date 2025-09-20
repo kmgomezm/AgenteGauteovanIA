@@ -35,5 +35,19 @@ class HybridSearcher:
                        key=lambda x: x[1], reverse=True)[:final_k]
         cids = [cid for cid,_ in fused]
         meta = self.df_meta.set_index("chunk_id").loc[cids].reset_index()
-        meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in cids]
+
+
+        #meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in cids]
+
+        try:
+            meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in cids]
+        except KeyError as e:
+            print(f"ID faltante: {e}")
+        # Filtrar solo los IDs válidos
+        valid_cids = [cid for cid in cids if cid in self.chunks.index]
+        meta = meta[meta["chunk_id"].isin(valid_cids)].reset_index(drop=True)
+        meta["chunk"] = [self.chunks.loc[cid]["chunk"] for cid in meta["chunk_id"]]
+
+        ##
+
         return meta

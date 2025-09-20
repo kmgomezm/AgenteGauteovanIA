@@ -6,7 +6,7 @@ from .prompts import SYSTEM, USER_TEMPLATE, format_evidence
 PROMPT = PromptTemplate.from_template(USER_TEMPLATE)
 
 class RAGPipeline:
-    def __init__(self, model="llama3.1:8b-instruct", temperature=0.2):
+    def __init__(self, model="llama3:instruct", temperature=0.2):
         self.llm = Ollama(model=model, temperature=temperature)
         self.searcher = HybridSearcher()
 

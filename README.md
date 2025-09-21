@@ -123,7 +123,7 @@ AgenteGauteovanIA/
 
 ## 🧠 Conceptos clave
 - **RAG híbrido**: FAISS (embeddings `intfloat/multilingual-e5-small`) + BM25 (rank-bm25). Fusión con **RRF**.
-- **Citas**: cada afirmación clave cita `[autor, periódico, fecha, título, doc_id]`.
+- **Citas**: cada afirmación clave cita `[autor, diairo, fecha, título, doc_id]`.
 - **NLP**: spaCy (`es_core_news_lg`) para NER; BETO para sentimiento; zero-shot opcional para tópicos.
 
 ## 📌 Notas

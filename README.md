@@ -36,17 +36,18 @@ graph TD
 1) **Instala dependencias**
 Asegurate que que el directorio de trabajo está en el directorio de trabajo `cd C:\path\to\AgenteGauteovanIA`, una vez ahí crea el entorno virtual:
 ```bash
-python -m venv .venv 
-.venv\Scripts\activate
+py -3.11 -m venv spacyenv
+.\spacyenv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
-pip install ollama langchain langchain-community duckduckgo-search pandas
 python -m spacy download es_core_news_lg
 ```
 2) **Instala Ollama** y modelos locales (en otra terminal):
 ```bash
 # https://ollama.com/download
 ollama pull llama3.1:8b-instruct
+# O un modelo más liviano
+# ollama pull llama3.2:3b
 ```
 3) **Construye los índices** 
 1. Ingesta: Lee el excel, lo limpia, divide en `chunks` sobrepuestos y guarda en un `.parket` con metadata: `'doc_id', 'autor', 'fecha', 'diario', 'título', 'vínculo', 'row_idx', 'chunk', 'chunk_id'`
@@ -81,7 +82,7 @@ streamlit run app/streamlit_app.py
 
 ## 📁 Estructura
 ```
-colombia-opinion-agent/
+AgenteGauteovanIA/
 ├─ app/
 │  ├─ streamlit_app.py
 │  └─ pages/
@@ -122,7 +123,7 @@ colombia-opinion-agent/
 
 ## 🧠 Conceptos clave
 - **RAG híbrido**: FAISS (embeddings `intfloat/multilingual-e5-small`) + BM25 (rank-bm25). Fusión con **RRF**.
-- **Citas**: cada afirmación clave cita `[autor, periódico, fecha, título, doc_id]`.
+- **Citas**: cada afirmación clave cita `[autor, diairo, fecha, título, doc_id]`.
 - **NLP**: spaCy (`es_core_news_lg`) para NER; BETO para sentimiento; zero-shot opcional para tópicos.
 
 ## 📌 Notas

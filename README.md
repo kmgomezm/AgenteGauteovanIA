@@ -64,7 +64,7 @@ python scripts/build_index.py
 Puedes probar el agente desde la terminal ejecutando el demo interactivo. Este script permite hacer preguntas y ver la respuesta generada por el modelo, junto con el modo de búsqueda y un resumen de la evidencia utilizada.
 
 ```bash
-python -m src.demo
+python -m scripts/eval_rag.py
 ```
 
 5) **Lanza la app**

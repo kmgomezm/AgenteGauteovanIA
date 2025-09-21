@@ -1,0 +1,9 @@
+app:
+  name: agente-gauteovan
+  env:
+    python_version: "3.11"
+  source:
+    local: .
+  run:
+    - pip install -r requirements.txt
+    - streamlit run app/streamlit_app.py --server.port=8080 --server.address=0.0.0.0

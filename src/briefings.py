@@ -10,5 +10,12 @@ def structured_briefs(self, question: str, evidence: str) -> dict:
         try:
             import json
             return json.loads(result)
-        except Exception:
-            return {"raw_output": result}
+        except Exception as e:
+            print(f"Error parsing JSON from LLM: {e}")
+            return {
+                "raw_output": result,
+                "por_año": ["Error procesando análisis por año"],
+                "por_medio": ["Error procesando análisis por medio"], 
+                "por_autor": ["Error procesando análisis por autor"]
+            }
+  

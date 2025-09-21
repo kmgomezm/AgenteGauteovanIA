@@ -36,11 +36,10 @@ graph TD
 1) **Instala dependencias**
 Asegurate que que el directorio de trabajo está en el directorio de trabajo `cd C:\path\to\AgenteGauteovanIA`, una vez ahí crea el entorno virtual:
 ```bash
-python -m venv .venv 
-.venv\Scripts\activate
+py -3.11 -m venv spacyenv
+.\spacyenv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
-pip install ollama langchain langchain-community duckduckgo-search pandas
 python -m spacy download es_core_news_lg
 ```
 2) **Instala Ollama** y modelos locales (en otra terminal):

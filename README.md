@@ -46,6 +46,8 @@ python -m spacy download es_core_news_lg
 ```bash
 # https://ollama.com/download
 ollama pull llama3.1:8b-instruct
+# O un modelo más liviano
+# ollama pull llama3.2:3b
 ```
 3) **Construye los índices** 
 1. Ingesta: Lee el excel, lo limpia, divide en `chunks` sobrepuestos y guarda en un `.parket` con metadata: `'doc_id', 'autor', 'fecha', 'diario', 'título', 'vínculo', 'row_idx', 'chunk', 'chunk_id'`

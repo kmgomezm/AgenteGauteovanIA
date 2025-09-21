@@ -1,7 +1,8 @@
+# 3_Analisis_NLP.py
 import streamlit as st
 from src.nlp_tools import ner, sentiment, classify
 
-st.title("Análisis NLP (NER / Sentimiento / Clasificación)")
+st.title("Análisis NLP (NER / Sentimiento / Clasificación) (POR TERMINAR)")
 txt = st.text_area("Texto para analizar", height=160)
 labels = st.text_input("Etiquetas separadas por coma (para zero-shot)", "política, economía, salud, cultura")
 

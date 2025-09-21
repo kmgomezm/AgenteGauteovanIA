@@ -1,3 +1,4 @@
+# 2_Buscador_avanzado.py
 import streamlit as st
 from src.search_hybrid import HybridSearcher
 from src.plots import plot_counts

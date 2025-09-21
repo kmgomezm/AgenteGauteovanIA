@@ -2,9 +2,9 @@
 from typing import Optional, Dict, Any
 import pandas as pd
 from langchain_ollama import OllamaLLM as Ollama
-from langchain.prompts import PromptTemplate
 from .search_hybrid import HybridSearcher
 from .prompts import SYSTEM_LOCAL, PROMPT, format_evidence
+from .briefings import structured_briefs
 
 
 class RAGPipeline:
@@ -33,7 +33,7 @@ class RAGPipeline:
         
         # Formatear evidencia para el prompt
         evidence = format_evidence(hits)
-        
+
         # Crear prompt con evidencia
         prompt = PROMPT.format(
             system=SYSTEM_LOCAL, 
@@ -49,8 +49,7 @@ class RAGPipeline:
 
 class RAGHybridPipeline:
     """
-    Pipeline RAG híbrido con fallback web (versión más avanzada).
-    Flujo: RAG local -> (opcional) Fallback Web si el usuario lo solicita.
+    Pipeline RAG híbrido con fallback web y razonamiento profundo opcional.
     """
     
     def __init__(
@@ -62,24 +61,17 @@ class RAGHybridPipeline:
         self.llm = Ollama(model=model, temperature=temperature)
         self.searcher = searcher or HybridSearcher()
 
+
     def answer(
         self,
         question: str,
         k_local: int = 8,
         min_local_chars: int = 400,
         allow_web: bool = False,
+        use_deep_reason: bool = False,
     ) -> Dict[str, Any]:
         """
-        Responde usando evidencia local, con fallback web opcional.
-        
-        Args:
-            question: La pregunta a responder
-            k_local: Número de documentos locales a recuperar
-            min_local_chars: Mínimo de caracteres para considerar evidencia suficiente
-            allow_web: Si permitir búsqueda web como fallback
-            
-        Returns:
-            Dict con respuesta, modo usado, evidencia, etc.
+        Responde usando evidencia local, con fallback web y razonamiento profundo opcionales.
         """
         
         # 1) RAG local
@@ -98,12 +90,19 @@ class RAGHybridPipeline:
                 )
                 answer = self.llm.invoke(prompt)
                 
+                # Generar briefs si se solicita razonamiento profundo
+                briefs = None
+                if use_deep_reason:
+                    print("Generando análisis estructurado...")
+                    briefs = structured_briefs(self, question, evidence)
+                
                 return {
                     "mode": "local",
                     "answer": answer,
                     "evidence_text": evidence,
                     "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
                     "allow_web": allow_web,
+                    "briefs": briefs,
                 }
         
         # 2) Si evidencia local insuficiente
@@ -112,20 +111,21 @@ class RAGHybridPipeline:
                 "mode": "local_insufficient",
                 "answer": (
                     "No encontré evidencia suficiente en la base local para responder con confianza. "
-                    "Si deseas, puedes activar la búsqueda web con allow_web=True."
+                    "Si deseas, puedes activar la búsqueda web."
                 ),
                 "evidence_text": "",
                 "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
                 "allow_web": allow_web,
+                "briefs": None,
             }
         
         # 3) Fallback web (si está habilitado)
-        # Nota: Aquí irían las funciones de búsqueda web que no están implementadas aún
+        # TODO: Implementar con src/web_search.py
         return {
             "mode": "web_not_implemented",
             "answer": "La búsqueda web no está implementada aún. Usa solo la evidencia local disponible.",
             "evidence_text": "",
             "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
             "allow_web": allow_web,
+            "briefs": None,
         }
-

@@ -4,7 +4,7 @@ from .rag_chain import RAGHybridPipeline
 
 def main():
     pipeline = RAGHybridPipeline(
-        model=os.getenv("LLM_MODEL", "llama3.1:8b"),
+        model=os.getenv("LLM_MODEL", "llama3.2:3b"),
         temperature=float(os.getenv("LLM_TEMP", "0.2"))
     )
 

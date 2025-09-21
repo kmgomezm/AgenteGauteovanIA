@@ -81,7 +81,7 @@ streamlit run app/streamlit_app.py
 
 ## 📁 Estructura
 ```
-colombia-opinion-agent/
+AgenteGauteovanIA/
 ├─ app/
 │  ├─ streamlit_app.py
 │  └─ pages/

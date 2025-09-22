@@ -6,4 +6,7 @@ app:
     local: .
   run:
     - pip install -r requirements.txt
-    - streamlit run app/streamlit_app.py --server.port=8080 --server.address=0.0.0.0
+    - streamlit run app/streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+ports:
+  - port: 8501
+    public: true

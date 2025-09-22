@@ -131,8 +131,3 @@ AgenteGauteovanIA/
 
 - Para resultados más “seguros”, usa `temperature=0.2` en `rag_chain.py`.
 
-## 🧪 Evaluación (rápida)
-- Especifica 30–50 queries de prueba en `scripts/eval_rag.py`, mide `Recall@K` y latencias por etapa.
-- Activa el logging en `app/streamlit_app.py` si quieres conservar conversaciones.
-
-¡Listo para iterar! Cualquier mejora (FTS5, reranking, filtros UI) la puedes añadir sin romper el flujo base.

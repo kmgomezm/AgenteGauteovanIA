@@ -1,3 +1,4 @@
+# src/nlp_tools.py
 import spacy
 from transformers import pipeline
 
@@ -13,8 +14,7 @@ def sentiment_pipe():
     global _sent
     if _sent is None:
         _sent = pipeline("text-classification",
-                         model="finiteautomata/beto-sentiment-analysis",
-                         top_k=None, truncation=True)
+                         model="pysentimiento/robertuito-sentiment-analysis")
     return _sent
 
 def ner(text):

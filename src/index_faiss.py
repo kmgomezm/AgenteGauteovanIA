@@ -1,3 +1,4 @@
+# src/index_faiss.py
 import faiss, numpy as np, pandas as pd
 from sentence_transformers import SentenceTransformer
 from pathlib import Path

@@ -57,7 +57,7 @@ if st.button("🔍 Responder", type="primary", key="answer_button"):
                     question=q, 
                     k_local=k_docs,
                     allow_web=allow_web,
-                    use_deep_reason=use_deep_reason  # ← Agregar este parámetro
+                    use_deep_reason=use_deep_reason 
                 )
                 
                 ans = ans_dict["answer"]

@@ -9,7 +9,7 @@ if "rag" not in st.session_state:
 q = st.chat_input("Pregunta algo…")
 if q:
     with st.spinner("Pensando…"):
-        ans, hits = st.session_state["rag"].answer(q)
+        ans = st.session_state["rag"].answer(q)
     with st.chat_message("user"):
         st.write(q)
     with st.chat_message("assistant"):

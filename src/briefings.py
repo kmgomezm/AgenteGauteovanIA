@@ -1,3 +1,4 @@
+# src/briefings.py
 from .prompts import SYSTEM_DEEP_REASON, PROMPT_DEEP_REASON
 
 def structured_briefs(self, question: str, evidence: str) -> dict:

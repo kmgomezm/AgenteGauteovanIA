@@ -4,168 +4,156 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 from src.rag_chain import RAGHybridPipeline
-from src.nlp_tools import ner, sentiment
 
-st.set_page_config(page_title="Agente Gauteovan IA", layout="wide")
-st.title("Agente de Opinión Gauteovan (2018–2020) – RAG Híbrido")
-
-# Inicializar el pipeline con manejo de errores
-if "rag" not in st.session_state:
-    try:
-        with st.spinner("Inicializando sistema RAG..."):
-            st.session_state["rag"] = RAGHybridPipeline()
-        st.success("Sistema inicializado correctamente")
-    except Exception as e:
-        st.error(f"Error al inicializar el sistema: {e}")
-        st.stop()
-
-# Opciones de búsqueda
-st.markdown("### Configuración de búsqueda")
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    options = st.multiselect(
-        "Opciones avanzadas:",
-        ["Permitir búsqueda web", "Razonamiento profundo (resúmenes estructurados)"],
-        default=[],
-        help="Selecciona las opciones que deseas activar para tu consulta"
-    )
-
-with col2:
-    k_docs = st.slider("Documentos a recuperar:", 3, 20, 8, help="Número de documentos más relevantes")
-
-allow_web = "Permitir búsqueda web" in options
-use_deep_reason = "Razonamiento profundo (resúmenes estructurados)" in options
-
-# Input principal
-st.markdown("### Consulta")
-q = st.text_input(
-    "Haz una pregunta sobre las columnas de opinión:",
-    key="main_question",
-    placeholder="Ej: ¿Qué se opina sobre la educación en Colombia?"
+# Configuración de página
+st.set_page_config(
+    page_title="Agente Gauteovan IA - Chat", 
+    page_icon="💬",
+    layout="wide"
 )
 
-# Botón de respuesta con validación
-if st.button("🔍 Responder", type="primary", key="answer_button"):
-    if not q.strip():
-        st.warning("Por favor, ingresa una pregunta antes de continuar")
-    else:
-        with st.spinner("Buscando en la base de conocimientos y generando respuesta..."):
+# Inicializar sistema RAG
+@st.cache_resource
+def init_rag_system():
+    """Inicializa RAG Pipeline una sola vez"""
+    try:
+        return RAGHybridPipeline(), None
+    except Exception as e:
+        return None, str(e)
+
+rag, init_error = init_rag_system()
+if init_error:
+    st.error(f"Error al inicializar el sistema: {init_error}")
+    st.stop()
+
+# ===== CHAT PRINCIPAL =====
+st.title("💬 Agente de Opinión Gauteovan (2018–2020)")
+st.markdown("### Chat con razonamiento profundo y búsqueda web opcional")
+
+# Opciones principales
+col1, col2, col3 = st.columns([1, 1, 2])
+with col1:
+    allow_web = st.checkbox("🌐 Permitir búsqueda web", value=False)
+with col2:
+    use_deep_reason = st.checkbox("🧠 Razonamiento profundo", value=False)
+with col3:
+    k_docs = st.slider("📄 Documentos locales", 3, 20, 8)
+
+# Inicializar historial de chat
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Mostrar historial
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if message["role"] == "assistant":
+            # indicador del modo
+            mode = message.get("mode_info")
+            if mode == "local":
+                st.success("✅ Respuesta basada en evidencia local")
+            elif mode == "local_insufficient":
+                st.warning("⚠️ Evidencia local insuficiente")
+            elif mode == "web":
+                st.info("🌐 Respuesta usando evidencia local + web")
+            elif mode == "web_failure":
+                st.error("❌ Error en búsqueda web")
+
+            # fuentes
+            if "sources" in message and message["sources"]:
+                with st.expander(f"📚 Fuentes ({len(message['sources'])})", expanded=False):
+                    for i, src in enumerate(message["sources"], 1):
+                        st.markdown(f"""
+                        **{i}.** **{src.get('titulo', 'Sin título')}**  
+                        👤 {src.get('autor', 'Sin autor')} • 📰 *{src.get('diario', 'Sin medio')}* • 📅 {str(src.get('fecha',''))[:10]}  
+                        🔗 {src.get('url', src.get('doc_id',''))} • 📊 Score: {src.get('rrf_score','N/A')}
+                        """)
+            # briefs
+            if "briefs" in message and message["briefs"]:
+                with st.expander("🧠 Análisis estructurado", expanded=False):
+                    briefs = message["briefs"]
+                    for key, title in [("por_año","📅 Por Año"),("por_medio","📰 Por Medio"),("por_autor","👤 Por Autor")]:
+                        st.markdown(f"#### {title}")
+                        if briefs.get(key):
+                            for item in briefs[key]:
+                                st.write(f"• {item}")
+                        else:
+                            st.info("No disponible")
+
+# Input del chat
+if prompt := st.chat_input("Haz una pregunta sobre las columnas de opinión..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Analizando y generando respuesta..."):
             try:
-                # Llamar al pipeline con los parámetros correctos
-                ans_dict = st.session_state["rag"].answer(
-                    question=q, 
+                result = rag.answer(
+                    question=prompt,
                     k_local=k_docs,
                     allow_web=allow_web,
-                    use_deep_reason=use_deep_reason 
+                    use_deep_reason=use_deep_reason
                 )
-                
-                ans = ans_dict["answer"]
-                hits = ans_dict.get("hits", [])
-                mode = ans_dict.get("mode", "unknown")
-                
-                # Mostrar información del modo usado
+                answer = result["answer"]
+                mode = result.get("mode","unknown")
+                hits = result.get("hits",[])
+                briefs = result.get("briefs")
+
+                # mostrar modo
                 if mode == "local":
                     st.success("✅ Respuesta basada en evidencia local")
                 elif mode == "local_insufficient":
                     st.warning("⚠️ Evidencia local insuficiente")
-                elif mode == "web_not_implemented":
-                    st.info("ℹ️ Búsqueda web no disponible")
-                    
+                elif mode == "web":
+                    st.info("🌐 Respuesta usando evidencia local + web")
+                elif mode == "web_failure":
+                    st.error("❌ Error en búsqueda web")
+
+                st.markdown(answer)
+
+                msg = {"role":"assistant","content":answer,"mode_info":mode}
+                if hits: msg["sources"]=hits
+                if briefs: msg["briefs"]=briefs
+                st.session_state.messages.append(msg)
+
             except Exception as e:
-                st.error(f"Error al procesar la consulta: {e}")
-                st.stop()
-        
-        # Mostrar respuesta
-        st.markdown("### 💬 Respuesta")
-        st.write(ans)
-        
-        # Mostrar resúmenes estructurados (si están disponibles)
-        if use_deep_reason and ans_dict.get("briefs"):
-            st.markdown("### 🧠 Análisis estructurado")
-            briefs = ans_dict["briefs"]
-            
-            # Crear tabs para cada faceta
-            tab1, tab2, tab3 = st.tabs(["📅 Por Año", "📰 Por Medio", "👤 Por Autor"])
-            
-            with tab1:
-                if "por_año" in briefs and briefs["por_año"]:
-                    for item in briefs["por_año"]:
-                        st.write(f"• {item}")
-                else:
-                    st.info("No hay análisis por año disponible")
-            
-            with tab2:
-                if "por_medio" in briefs and briefs["por_medio"]:
-                    for item in briefs["por_medio"]:
-                        st.write(f"• {item}")
-                else:
-                    st.info("No hay análisis por medio disponible")
-            
-            with tab3:
-                if "por_autor" in briefs and briefs["por_autor"]:
-                    for item in briefs["por_autor"]:
-                        st.write(f"• {item}")
-                else:
-                    st.info("No hay análisis por autor disponible")
-            
-            # Mostrar análisis crudo si existe (para debugging)
-            if "analisis_crudo" in briefs:
-                with st.expander("🔧 Análisis crudo (debug)", expanded=False):
-                    st.text(briefs["analisis_crudo"])
-        
-        # Mostrar fuentes
-        if hits:
-            with st.expander(f"📚 Fuentes consultadas ({len(hits)} documentos)", expanded=False):
-                for i, r in enumerate(hits, 1):
-                    if isinstance(r, dict):
-                        titulo = r.get('título', 'Sin título')
-                        autor = r.get('autor', 'Sin autor')
-                        diario = r.get('diario', 'Sin medio')
-                        fecha = str(r.get('fecha', ''))[:10]
-                        doc_id = r.get('doc_id', 'Sin ID')
-                        rrf_score = r.get('rrf_score', 'N/A')
-                        
-                        st.markdown(f"""
-                        **{i}.** **{titulo}**  
-                        👤 {autor} • 📰 *{diario}* • 📅 {fecha}  
-                        🔗 `{doc_id}` • 📊 Score: {rrf_score}
-                        """)
-                
-        else:
-            st.info("No se encontraron fuentes relevantes")
+                error_msg = f"❌ Error: {str(e)}"
+                st.error(error_msg)
+                st.session_state.messages.append({"role":"assistant","content":error_msg})
 
-st.divider()
-st.markdown("### 🔬 Herramientas de análisis de texto")
-st.markdown("Analiza cualquier texto usando herramientas de NLP")
+# Ejemplos rápidos
+st.markdown("---")
+st.markdown("### 💡 Ejemplos")
+ejemplos = [
+    "¿Qué opinaban los columnistas sobre el acuerdo de paz en 2019?",
+    "¿Cuáles eran las principales críticas a la educación pública?",
+    "¿Qué se decía sobre las protestas estudiantiles en 2018?",
+    "¿Cómo se abordó el tema de la corrupción en los medios?",
+]
+cols = st.columns(len(ejemplos))
+for i,ej in enumerate(ejemplos):
+    if cols[i].button(f"💬 {ej}", key=f"ejemplo_{i}", use_container_width=True):
+        st.session_state.messages.append({"role":"user","content":ej})
+        st.rerun()
 
-txt = st.text_area(
-    "Pega un texto para analizar:", 
-    height=120, 
-    key="analysis_text",
-    placeholder="Ingresa o pega el texto que quieres analizar..."
-)
+# Controles
+st.markdown("---")
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("🗑️ Limpiar conversación", use_container_width=True):
+        st.session_state.messages=[]
+        st.rerun()
+with col2:
+    if st.session_state.messages:
+        conversation = "\n\n".join(
+            [("Usuario" if m["role"]=="user" else "Asistente")+": "+m["content"]
+             for m in st.session_state.messages]
+        )
+        st.download_button("💾 Descargar chat",data=conversation,file_name="chat.txt")
 
-if txt.strip():
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🏷️ Reconocimiento de Entidades (NER)", key="ner_button"):
-            with st.spinner("Analizando entidades..."):
-                try:
-                    ner_result = ner(txt)
-                    st.markdown("#### Entidades encontradas:")
-                    st.json(ner_result)
-                except Exception as e:
-                    st.error(f"Error en análisis NER: {e}")
-    
-    with col2:
-        if st.button("😊 Análisis de Sentimiento", key="sentiment_button"):
-            with st.spinner("Analizando sentimiento..."):
-                try:
-                    sentiment_result = sentiment(txt)
-                    st.markdown("#### Análisis de sentimiento:")
-                    st.json(sentiment_result)
-                except Exception as e:
-                    st.error(f"Error en análisis de sentimiento: {e}")
-else:
-    st.info("👆 Ingresa un texto arriba para usar las herramientas de análisis")
+# Footer
+st.markdown("---")
+st.markdown("<div style='text-align:center;color:#666;'>"
+            "<small>🎓 Agente Gauteovan IA • RAG híbrido local+web • UdeA</small>"
+            "</div>", unsafe_allow_html=True)

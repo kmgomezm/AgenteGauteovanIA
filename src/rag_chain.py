@@ -5,6 +5,7 @@ from langchain_ollama import OllamaLLM as Ollama
 from .search_hybrid import HybridSearcher
 from .prompts import SYSTEM_LOCAL, PROMPT, format_evidence
 from .briefings import structured_briefs
+from .web_search import web_search_duckduckgo
 
 
 class RAGPipeline:
@@ -60,7 +61,6 @@ class RAGHybridPipeline:
     ):
         self.llm = Ollama(model=model, temperature=temperature)
         self.searcher = searcher or HybridSearcher()
-
 
     def answer(
         self,
@@ -120,12 +120,22 @@ class RAGHybridPipeline:
             }
         
         # 3) Fallback web (si está habilitado)
-        # TODO: Implementar con src/web_search.py
-        return {
-            "mode": "web_not_implemented",
-            "answer": "La búsqueda web no está implementada aún. Usa solo la evidencia local disponible.",
-            "evidence_text": "",
-            "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
-            "allow_web": allow_web,
-            "briefs": None,
-        }
+        try:
+            web_hits = web_search_duckduckgo(question, max_results=6)
+            return {
+                "mode": "web",
+                "answer": "Resultados de la web encontrados. Integra con LLM si deseas.",
+                "evidence_text": "\n\n".join(h["texto"] for h in web_hits),
+                "hits": web_hits,
+                "allow_web": allow_web,
+                "briefs": None,
+            }
+        except Exception as e:
+            return {
+                "mode": "web_failure",
+                "answer": f"Error en la búsqueda web: {e}",
+                "evidence_text": "",
+                "hits": [],
+                "allow_web": allow_web,
+                "briefs": None,
+            }

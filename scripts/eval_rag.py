@@ -1,6 +1,7 @@
-# Plantilla de evaluación rápida
+# scripts/eval_rag.py
+# Plantilla de evaluación rápida 
 from time import perf_counter
-from src.rag_chain import RAGPipeline
+from src.rag_chain import RAGHybridPipeline
 
 QUERIES = [
     "¿Qué se opinaba sobre el acuerdo de paz en 2019?",
@@ -8,11 +9,16 @@ QUERIES = [
 ]
 
 if __name__ == "__main__":
-    rag = RAGPipeline()
+    rag = RAGHybridPipeline()
     for q in QUERIES:
         t0 = perf_counter()
-        ans, hits = rag.answer(q)
+        result = rag.answer(q)  # devuelve un dict
         dt = perf_counter() - t0
+
+        ans = result.get("answer", "")
+        hits = result.get("hits") or result.get("web_results", [])
+
         print("Q:", q)
         print("t=", round(dt, 2), "s")
-        print(ans[:400], "…\n---\n")
+        print("RESPUESTA:\n", ans[:400], "…\n")
+        print("FUENTES:", len(hits), "\n---\n")

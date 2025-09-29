@@ -1,131 +1,124 @@
 # src/rag_chain.py
 from typing import Optional, Dict, Any
 import pandas as pd
-from langchain_ollama import OllamaLLM as Ollama
-from .search_hybrid import HybridSearcher
-from .prompts import SYSTEM_LOCAL, PROMPT, format_evidence
+from langchain_community.llms import Ollama
+from langchain.memory import ConversationBufferWindowMemory
+
+from .utils import _evidence_sufficient
+from .prompts import SYSTEM_LOCAL, SYSTEM_WEB, PROMPT
 from .briefings import structured_briefs
-
-
-class RAGPipeline:
-    """Pipeline RAG simple para consultas con evidencia local"""
-    
-    def __init__(self, model="llama3.2:3b", temperature=0.2):
-        self.llm = Ollama(model=model, temperature=temperature)
-        self.searcher = HybridSearcher()
-
-    def answer(self, question: str, k: int = 8):
-        """
-        Responde una pregunta usando evidencia local de la base de datos.
-        
-        Args:
-            question: La pregunta a responder
-            k: Número de documentos a recuperar
-            
-        Returns:
-            Tuple de (respuesta, hits_dataframe)
-        """
-        # Buscar evidencia relevante
-        hits = self.searcher.search(question, final_k=k)
-        
-        if hits is None or hits.empty:
-            return "No se encontró evidencia relevante para responder la pregunta.", pd.DataFrame()
-        
-        # Formatear evidencia para el prompt
-        evidence = format_evidence(hits)
-
-        # Crear prompt con evidencia
-        prompt = PROMPT.format(
-            system=SYSTEM_LOCAL, 
-            question=question, 
-            evidence=evidence
-        )
-        
-        # Generar respuesta
-        answer = self.llm.invoke(prompt)
-        
-        return answer, hits
+from .formatting import format_evidence_local, format_evidence_web
+from .intent_user import parse_user_intent
+from .web_search import web_search_duckduckgo
+from .search_hybrid import HybridSearcher
 
 
 class RAGHybridPipeline:
     """
-    Pipeline RAG híbrido con fallback web y razonamiento profundo opcional.
+    Flujo:
+      1. Buscar en base local con FAISS+BM25.
+      2. Si no hay suficiente evidencia local:
+          - Responde con aviso, salvo que allow_web=True.
+          - Si allow_web=True → buscar en la web.
+    Devuelve un dict con: respuesta, modo, evidencia usada, fuentes, briefs.
     """
-    
+
     def __init__(
         self,
-        model: str = "llama3.2:3b",
+        model: str = "llama3.1:8b",
         temperature: float = 0.2,
         searcher: Optional[HybridSearcher] = None,
+        use_memory: bool = False,  # 🔧 ahora configurable
     ):
         self.llm = Ollama(model=model, temperature=temperature)
         self.searcher = searcher or HybridSearcher()
-
+        self.memory = ConversationBufferWindowMemory(k=5, return_messages=True) if use_memory else None
 
     def answer(
         self,
         question: str,
         k_local: int = 8,
         min_local_chars: int = 400,
-        allow_web: bool = False,
+        k_web: int = 6,
+        allow_web: Optional[bool] = None,
         use_deep_reason: bool = False,
     ) -> Dict[str, Any]:
         """
-        Responde usando evidencia local, con fallback web y razonamiento profundo opcionales.
+        Devuelve un diccionario con:
+          - mode: 'local', 'local_deep_reason', 'local_insufficient', 'web', 'web_none'
+          - answer: respuesta en texto
+          - evidence_text: evidencia formateada
+          - hits / web_results: fuentes consultadas
+          - briefs: análisis estructurado (si deep_reason=True)
         """
-        
-        # 1) RAG local
-        hits = self.searcher.search(question, final_k=k_local)
-        
-        # Verificar si la evidencia local es suficiente
-        if hits is not None and not hits.empty:
-            total_chars = sum(len(str(chunk)) for chunk in hits.get('chunk', []))
-            
-            if total_chars >= min_local_chars:
-                evidence = format_evidence(hits)
-                prompt = PROMPT.format(
-                    system=SYSTEM_LOCAL, 
-                    question=question, 
-                    evidence=evidence
-                )
-                answer = self.llm.invoke(prompt)
-                
-                # Generar briefs si se solicita razonamiento profundo
-                briefs = None
-                if use_deep_reason:
-                    print("Generando análisis estructurado...")
-                    briefs = structured_briefs(self, question, evidence)
-                
-                return {
-                    "mode": "local",
-                    "answer": answer,
-                    "evidence_text": evidence,
-                    "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
-                    "allow_web": allow_web,
-                    "briefs": briefs,
-                }
-        
-        # 2) Si evidencia local insuficiente
+        # 1) Intención del usuario (para activar web si lo pide explícitamente)
+        clean_question, intent_allow_web = parse_user_intent(question)
+        if allow_web is None:
+            allow_web = intent_allow_web
+
+        # 2) RAG local
+        hits = self.searcher.search(clean_question, final_k=k_local)
+
+        if _evidence_sufficient(hits, min_total_chars=min_local_chars):
+            evidence = format_evidence_local(hits, enumerate_chunks=True)
+            briefs = None
+
+            if use_deep_reason:
+                briefs = structured_briefs(self, clean_question, evidence)  # 🔧 fix aquí
+                import json
+                evidence = json.dumps(briefs, ensure_ascii=False, indent=2)
+
+            prompt = PROMPT.format(system=SYSTEM_LOCAL, question=clean_question, evidence=evidence)
+            answer = self.llm.invoke(prompt)
+
+            if self.memory is not None:
+                self.memory.save_context({"input": clean_question}, {"output": answer})
+
+            return {
+                "mode": "local_deep_reason" if use_deep_reason else "local",
+                "answer": answer,
+                "evidence_text": evidence,
+                "hits": hits.to_dict(orient="records"),
+                "allow_web": allow_web,
+                "briefs": briefs,
+            }
+
+        # 3) Evidencia local insuficiente
         if not allow_web:
             return {
                 "mode": "local_insufficient",
                 "answer": (
-                    "No encontré evidencia suficiente en la base local para responder con confianza. "
-                    "Si deseas, puedes activar la búsqueda web."
+                    "⚠️ No encontré evidencia suficiente en la base local para responder con confianza. "
+                    "Puedes activar la búsqueda en web para intentar complementar."
                 ),
                 "evidence_text": "",
                 "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
                 "allow_web": allow_web,
-                "briefs": None,
             }
-        
-        # 3) Fallback web (si está habilitado)
-        # TODO: Implementar con src/web_search.py
+
+        # 4) Fallback Web
+        web_results = web_search_duckduckgo(clean_question, max_results=k_web)
+        if not web_results:
+            return {
+                "mode": "web_none",
+                "answer": "❌ No encontré información confiable en resultados web.",
+                "evidence_text": "",
+                "web_results": [],
+                "allow_web": allow_web,
+            }
+
+        evidence = format_evidence_web(web_results, enumerate_items=True)
+        prompt = PROMPT.format(system=SYSTEM_WEB, question=clean_question, evidence=evidence)
+        answer = self.llm.invoke(prompt)
+
+        if self.memory is not None:
+            self.memory.save_context({"input": clean_question}, {"output": answer})
+
         return {
-            "mode": "web_not_implemented",
-            "answer": "La búsqueda web no está implementada aún. Usa solo la evidencia local disponible.",
-            "evidence_text": "",
-            "hits": hits.to_dict(orient="records") if isinstance(hits, pd.DataFrame) else [],
+            "mode": "web",
+            "answer": answer,
+            "evidence_text": evidence,
+            "web_results": web_results,
+            "sources": web_results, 
             "allow_web": allow_web,
-            "briefs": None,
         }

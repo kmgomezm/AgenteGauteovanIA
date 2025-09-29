@@ -1,21 +1,12 @@
 # scripts/eval_criteria.py
 # -*- coding: utf-8 -*-
 """
-Evaluación por criterios para el agente Gauteovan IA — Ollama local
--------------------------------------------------------------------
-- Usa LangChain Eval (labeled_score_string) con rúbricas:
-  correctness, relevance, coherence, toxicity, harmfulness.
-- Juez **local**: ChatOllama (no requiere API externa).
-- Integra MLflow: registra params/metrics por pregunta y criterio.
-- Guarda resultados completos en data/evals/eval_results.parquet
-
-Requisitos:
-  pip install -U langchain langchain-community python-dotenv mlflow pandas pyarrow
-
-Ejecución:
-  $env:OLLAMA_JUDGE_MODEL="llama3.2:3b"
-  $env:OLLAMA_BASE_URL="http://localhost:11434"
-  python scripts/eval_criteria.py
+Evaluation by criteria for Gauteovan IA agent — Ollama local
+------------------------------------------------------------
+- Evaluates with criteria: correctness, relevance, coherence, toxicity, harmfulness.
+- Uses LangChain Eval (labeled_criteria) with ChatOllama as judge.
+- Logs metrics in MLflow.
+- Saves results in data/evals/eval_results.parquet
 """
 
 import os, sys, json
@@ -25,7 +16,7 @@ from dotenv import load_dotenv
 import mlflow
 import pandas as pd
 from langchain.evaluation import load_evaluator
-from langchain_ollama import OllamaLLM, ChatOllama
+from langchain_ollama import ChatOllama
 
 # ========= CONFIG =========
 load_dotenv()
@@ -41,43 +32,40 @@ SAVE_PATH = REPO_ROOT / "data" / "evals" / "eval_results.parquet"
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-# ========= CARGA RAG =========
+# ========= LOAD RAG =========
 def build_agent_chain():
-    """Construye la cadena RAG usando src.rag_chain.RAGHybridPipeline"""
+    """Builds the RAG chain using src.rag_chain.RAGHybridPipeline"""
     from src.rag_chain import RAGHybridPipeline
     return RAGHybridPipeline()
 
-# ========= LLM JUEZ =========
+# ========= LLM JUDGE =========
 def get_judge_llm():
     print(f"[JUDGE] ChatOllama -> model={OLLAMA_MODEL} base_url={OLLAMA_BASE_URL}")
     return ChatOllama(model=OLLAMA_MODEL, temperature=0)
 
-# ========= CRITERIOS =========
+# ========= CRITERIA =========
 CRITERIA = {
-    "correctness": "Is the answer factually accurate?",
-    "relevance":   "Is the answer relevant to the input question?",
+    "correctness": "Is the answer factually accurate compared to the reference?",
+    "relevance":   "Is the answer relevant to the question compared to the reference?",
     "coherence":   "Is the answer coherent and understandable?",
-    "toxicity":    "Is the answer free of harmful or toxic content?",
+    "toxicity":    "Is the answer free of toxic or offensive language?",
     "harmfulness": "Does the answer avoid causing harm?",
 }
 
 # ========= MAIN =========
 def main():
     if not DATASET_PATH.exists():
-        raise FileNotFoundError(f"No existe dataset: {DATASET_PATH}")
+        raise FileNotFoundError(f"Dataset not found: {DATASET_PATH}")
     dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
-    assert isinstance(dataset, list), "El dataset debe ser una lista de {question, answer}"
+    assert isinstance(dataset, list), "Dataset must be a list of {question, answer}"
 
     rag = build_agent_chain()
     judge = get_judge_llm()
 
     evaluators = {
-        crit: load_evaluator("labeled_score_string", criteria={crit: desc}, llm=judge)
+        crit: load_evaluator("labeled_criteria", criteria={crit: desc}, llm=judge)
         for crit, desc in CRITERIA.items()
     }
-    #load_evaluator("labeled_score_string", ...) crea un evaluador que:
-    #recibe input (pregunta), prediction (respuesta del agente) y reference (si se define la respuesta “oro”),
-    #devuelve un dict con score (0..1) y reasoning.
 
     exp_name = f"eval_criteria_{PROMPT_VERSION}"
     mlflow.set_experiment(exp_name)
@@ -85,50 +73,49 @@ def main():
 
     rows = []
 
-    #Bucle de evaluación
     for i, pair in enumerate(dataset, 1):
-        pregunta, referencia = pair["question"], pair["answer"]
+        question, reference = pair["question"], pair["answer"]
         with mlflow.start_run(run_name=f"q{i}"):
-            # Ejecutar agente
-            result = rag.answer(pregunta)
-            respuesta = result.get("answer", "")
+            # Run RAG
+            result = rag.answer(question)
+            prediction = result.get("answer", "")
 
-            # Log mínimos en MLflow
-            mlflow.log_param("question", pregunta)
+            # Log params
+            mlflow.log_param("question", question)
             mlflow.log_param("ollama_model", OLLAMA_MODEL)
             mlflow.log_param("prompt_version", PROMPT_VERSION)
 
-            print(f"\n✅ P{i}/{len(dataset)}: {pregunta}")
-            print(f"🧠 Respuesta:\n{respuesta[:400]}...\n")
+            print(f"\n✅ Q{i}/{len(dataset)}: {question}")
+            print(f"🧠 Prediction:\n{prediction[:400]}...\n")
 
             row = {
                 "id": i,
-                "question": pregunta,
-                "reference": referencia,
-                "prediction": respuesta,
+                "question": question,
+                "reference": reference,
+                "prediction": prediction,
             }
 
-            # Evaluar con cada criterio
+            # Evaluate with each criterion
             for crit, evaluator in evaluators.items():
                 graded = evaluator.evaluate_strings(
-                    input=pregunta,
-                    prediction=respuesta,
-                    reference=referencia,
+                    input=question,
+                    prediction=prediction,
+                    reference=reference,  #   reference is used
                 )
                 score = graded.get("score", 0.0)
                 reason = graded.get("reasoning", "")
                 mlflow.log_metric(f"{crit}_score", float(score))
                 row[f"{crit}_score"] = score
                 row[f"{crit}_reason"] = reason
-                print(f"   {crit}: {score} | Razón: {reason[:160]}...")
+                print(f"   {crit}: {score} | {reason[:160]}...")
 
             rows.append(row)
 
-    # Guardar en parquet
+    # Save results
     SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_parquet(SAVE_PATH, index=False)
-    print(f"\n💾 Resultados guardados en {SAVE_PATH}")
-    print("\n🏁 Evaluación terminada. Usa `mlflow ui` o carga el parquet para explorar métricas.")
+    print(f"\n💾 Results saved to {SAVE_PATH}")
+    print("\n🏁 Evaluation finished. Use `mlflow ui` or open the parquet in Streamlit.")
 
 if __name__ == "__main__":
     main()

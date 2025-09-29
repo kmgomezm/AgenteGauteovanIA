@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/karen/Desktop/AgenteGauteovanIA/mlruns/720738256024743625/1a4b1cefc2404c48bd3e18f22b38c80b/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '720738256024743625'
+lifecycle_stage: active
+run_id: 1a4b1cefc2404c48bd3e18f22b38c80b
+run_name: q2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1759126615415
+status: 1
+tags: []
+user_id: karen

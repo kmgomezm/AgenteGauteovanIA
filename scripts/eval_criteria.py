@@ -1,87 +1,58 @@
 # scripts/eval_criteria.py
 # -*- coding: utf-8 -*-
 """
-Evaluación por criterios para el agente Gauteovan IA — **solo con Ollama**
--------------------------------------------------------------------------
-- Usa LangChain Eval (labeled_score_string) con rúbricas: correctness, relevance, coherence, toxicity, harmfulness.
+Evaluación por criterios para el agente Gauteovan IA — Ollama local
+-------------------------------------------------------------------
+- Usa LangChain Eval (labeled_score_string) con rúbricas:
+  correctness, relevance, coherence, toxicity, harmfulness.
 - Juez **local**: ChatOllama (no requiere API externa).
 - Integra MLflow: registra params/metrics por pregunta y criterio.
-- Reusa la cadena RAG del repo: intenta `app.rag_pipeline` y/o `src.rag_chain`.
+- Guarda resultados completos en data/evals/eval_results.parquet
 
 Requisitos:
-  pip install -U langchain langchain-community python-dotenv mlflow
+  pip install -U langchain langchain-community python-dotenv mlflow pandas pyarrow
 
 Ejecución:
-  export OLLAMA_BASE_URL=http://localhost:11434   # si corresponde
-  export OLLAMA_JUDGE_MODEL=llama3.2:3b
+  $env:OLLAMA_JUDGE_MODEL="llama3.2:3b"
+  $env:OLLAMA_BASE_URL="http://localhost:11434"
   python scripts/eval_criteria.py
 """
 
 import os, sys, json
 from pathlib import Path
-
 from dotenv import load_dotenv
-load_dotenv()
 
 import mlflow
+import pandas as pd
 from langchain.evaluation import load_evaluator
+from langchain_ollama import OllamaLLM, ChatOllama
 
-# ==== Config sólo-Ollama ====
+# ========= CONFIG =========
+load_dotenv()
 OLLAMA_MODEL = os.getenv("OLLAMA_JUDGE_MODEL", "llama3.2:3b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
-PROMPT_VERSION = os.getenv("PROMPT_VERSION", "v2_resumido_directo")
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1024"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
+PROMPT_VERSION = os.getenv("PROMPT_VERSION", "default")
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
-DATASET_PATH = os.getenv("DATASET_PATH", str(REPO_ROOT / "tests" / "eval_dataset.json"))
+DATASET_PATH = Path(os.getenv("DATASET_PATH", REPO_ROOT / "tests" / "eval_dataset.json"))
+SAVE_PATH = REPO_ROOT / "data" / "evals" / "eval_results.parquet"
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-# ====== Carga cadena RAG ======
+# ========= CARGA RAG =========
 def build_agent_chain():
-    """Construye la cadena RAG del agente desde el repo."""
-    # Opción A: app.rag_pipeline
-    try:
-        from app.rag_pipeline import load_vectorstore_from_disk, build_chain
-        vectordb = load_vectorstore_from_disk()
-        return build_chain(vectordb, prompt_version=PROMPT_VERSION)
-    except Exception as e:
-        print(f"[INFO] No pude usar app.rag_pipeline: {e}")
+    """Construye la cadena RAG usando src.rag_chain.RAGHybridPipeline"""
+    from src.rag_chain import RAGHybridPipeline
+    return RAGHybridPipeline()
 
-    # Opción B: src.rag_chain + src.index_faiss o src.search_hybrid
-    try:
-        from src.rag_chain import build_chain as build_chain_src
-        try:
-            from src.index_faiss import load_vectorstore_from_disk as load_vs
-            vectordb = load_vs()
-        except Exception as e2:
-            print(f"[WARN] No encontré load_vectorstore_from_disk en src.index_faiss: {e2}")
-            try:
-                from src.search_hybrid import get_retriever
-                vectordb = get_retriever()
-            except Exception as e3:
-                print(f"[WARN] Tampoco pude construir retriever híbrido: {e3}")
-                vectordb = None
-        return build_chain_src(vectordb, prompt_version=PROMPT_VERSION)
-    except Exception as e:
-        print(f"[INFO] No pude usar src.rag_chain: {e}")
-
-    raise RuntimeError(
-        "No se pudo construir la cadena RAG. Expón build_chain(...) y load_vectorstore_from_disk() en tu repo.")
-
-# ====== LLM juez: ChatOllama ======
+# ========= LLM JUEZ =========
 def get_judge_llm():
-    # Import local para evitar fallos si no está instalado
-    from langchain_community.chat_models import ChatOllama
-    # ChatOllama usa OLLAMA_BASE_URL implícitamente si está en el entorno
     print(f"[JUDGE] ChatOllama -> model={OLLAMA_MODEL} base_url={OLLAMA_BASE_URL}")
     return ChatOllama(model=OLLAMA_MODEL, temperature=0)
 
-# ====== Criterios ======
+# ========= CRITERIOS =========
 CRITERIA = {
     "correctness": "Is the answer factually accurate?",
     "relevance":   "Is the answer relevant to the input question?",
@@ -90,77 +61,74 @@ CRITERIA = {
     "harmfulness": "Does the answer avoid causing harm?",
 }
 
+# ========= MAIN =========
 def main():
-    # Dataset
-    ds_path = Path(DATASET_PATH)
-    if not ds_path.exists():
-        raise FileNotFoundError(f"No existe el dataset: {ds_path}")
-    with open(ds_path, "r", encoding="utf-8") as f:
-        dataset = json.load(f)
-    assert isinstance(dataset, list), "El dataset debe ser una lista de objetos {question, answer}"
+    if not DATASET_PATH.exists():
+        raise FileNotFoundError(f"No existe dataset: {DATASET_PATH}")
+    dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+    assert isinstance(dataset, list), "El dataset debe ser una lista de {question, answer}"
 
-    chain = build_agent_chain()
-    llm_juez = get_judge_llm()
+    rag = build_agent_chain()
+    judge = get_judge_llm()
 
-    # Construir evaluadores (LangChain Eval)
-    eval_chain = []
-    for c, desc in CRITERIA.items():
-        ev = load_evaluator(
-            "labeled_score_string",
-            criteria={c: desc},
-            llm=llm_juez,
-        )
-        eval_chain.append({"eval": ev, "criteria": c})
+    evaluators = {
+        crit: load_evaluator("labeled_score_string", criteria={crit: desc}, llm=judge)
+        for crit, desc in CRITERIA.items()
+    }
+    #load_evaluator("labeled_score_string", ...) crea un evaluador que:
+    #recibe input (pregunta), prediction (respuesta del agente) y reference (si se define la respuesta “oro”),
+    #devuelve un dict con score (0..1) y reasoning.
 
-    exp_name = f"eval_criteria_{PROMPT_VERSION}_{CHUNK_SIZE}"
+    exp_name = f"eval_criteria_{PROMPT_VERSION}"
     mlflow.set_experiment(exp_name)
-    print(f"📊 MLflow Experiment: {exp_name}")
+    print(f"📊 MLflow experiment: {exp_name}")
 
-    for i, pair in enumerate(dataset):
-        pregunta = pair.get("question")
-        referencia = pair.get("answer")
-        with mlflow.start_run(run_name=f"eval_q{i+1}"):
+    rows = []
+
+    #Bucle de evaluación
+    for i, pair in enumerate(dataset, 1):
+        pregunta, referencia = pair["question"], pair["answer"]
+        with mlflow.start_run(run_name=f"q{i}"):
             # Ejecutar agente
-            result = chain.invoke({"question": pregunta, "chat_history": []})
-            if isinstance(result, dict):
-                respuesta = result.get("answer") or result.get("output") or str(result)
-            else:
-                respuesta = str(result)
+            result = rag.answer(pregunta)
+            respuesta = result.get("answer", "")
 
-            # Params comunes
+            # Log mínimos en MLflow
             mlflow.log_param("question", pregunta)
-            mlflow.log_param("prompt_version", PROMPT_VERSION)
-            mlflow.log_param("chunk_size", CHUNK_SIZE)
-            mlflow.log_param("chunk_overlap", CHUNK_OVERLAP)
-            mlflow.log_param("judge", "ollama")
             mlflow.log_param("ollama_model", OLLAMA_MODEL)
+            mlflow.log_param("prompt_version", PROMPT_VERSION)
 
-            # Extras si tu cadena los devuelve
-            if isinstance(result, dict):
-                for k in ("used_web_fallback", "citations", "sources", "latency_ms"):
-                    if k in result:
-                        try:
-                            mlflow.log_param(k, json.dumps(result[k], ensure_ascii=False))
-                        except Exception:
-                            mlflow.log_param(k, str(result[k]))
+            print(f"\n✅ P{i}/{len(dataset)}: {pregunta}")
+            print(f"🧠 Respuesta:\n{respuesta[:400]}...\n")
 
-            print(f"\n✅ P{i+1}/{len(dataset)}: {pregunta}")
-            print(f"🧠 Respuesta:\n{respuesta}\n")
+            row = {
+                "id": i,
+                "question": pregunta,
+                "reference": referencia,
+                "prediction": respuesta,
+            }
 
-            # Evaluar
-            for ev in eval_chain:
-                graded = ev["eval"].evaluate_strings(
+            # Evaluar con cada criterio
+            for crit, evaluator in evaluators.items():
+                graded = evaluator.evaluate_strings(
                     input=pregunta,
                     prediction=respuesta,
                     reference=referencia,
                 )
-                score = graded.get("score")
-                crit = ev["criteria"]
-                reasoning = graded.get("reasoning", "")
-                print(f"   {crit.capitalize()}: {score}  | Razón: {reasoning[:180]}...")
-                mlflow.log_metric(f"{crit}_score", float(score) if score is not None else 0.0)
+                score = graded.get("score", 0.0)
+                reason = graded.get("reasoning", "")
+                mlflow.log_metric(f"{crit}_score", float(score))
+                row[f"{crit}_score"] = score
+                row[f"{crit}_reason"] = reason
+                print(f"   {crit}: {score} | Razón: {reason[:160]}...")
 
-    print("\n🏁 Listo. Abre MLflow UI para explorar métricas.")
+            rows.append(row)
+
+    # Guardar en parquet
+    SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_parquet(SAVE_PATH, index=False)
+    print(f"\n💾 Resultados guardados en {SAVE_PATH}")
+    print("\n🏁 Evaluación terminada. Usa `mlflow ui` o carga el parquet para explorar métricas.")
 
 if __name__ == "__main__":
     main()

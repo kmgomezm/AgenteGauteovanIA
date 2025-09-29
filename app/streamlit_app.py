@@ -1,3 +1,4 @@
+# app/streamlit_app.py
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -5,28 +6,35 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from src.rag_chain import RAGHybridPipeline
 
-# Configuración de página
+# ================= CONFIGURACIÓN DE PÁGINA =================
 st.set_page_config(
-    page_title="Agente Gauteovan IA - Chat", 
+    page_title="Agente Gauteovan IA - Chat",
     page_icon="💬",
     layout="wide"
 )
 
-# Inicializar sistema RAG
+# ================= INICIALIZAR RAG =================
 @st.cache_resource
 def init_rag_system():
     """Inicializa RAG Pipeline una sola vez"""
     try:
-        return RAGHybridPipeline(), None
+        return RAGHybridPipeline(use_memory=False), None
+    except TypeError as e:
+        if "unexpected keyword argument 'use_memory'" in str(e):
+            try:
+                return RAGHybridPipeline(), None
+            except Exception as e2:
+                return None, f"Fallo al crear RAGHybridPipeline sin use_memory: {e2}"
+        return None, str(e)
     except Exception as e:
         return None, str(e)
 
 rag, init_error = init_rag_system()
 if init_error:
-    st.error(f"Error al inicializar el sistema: {init_error}")
+    st.error(f"❌ Error al inicializar el sistema: {init_error}")
     st.stop()
 
-# ===== CHAT PRINCIPAL =====
+# ================= INTERFAZ PRINCIPAL =================
 st.title("💬 Agente de Opinión Gauteovan (2018–2020)")
 st.markdown("### Chat con razonamiento profundo y búsqueda web opcional")
 
@@ -43,7 +51,7 @@ with col3:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Mostrar historial
+# ================= MOSTRAR HISTORIAL =================
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -52,27 +60,43 @@ for message in st.session_state.messages:
             mode = message.get("mode_info")
             if mode == "local":
                 st.success("✅ Respuesta basada en evidencia local")
+            elif mode == "local_deep_reason":
+                st.success("🧠 Respuesta con razonamiento profundo sobre evidencia local")
             elif mode == "local_insufficient":
                 st.warning("⚠️ Evidencia local insuficiente")
             elif mode == "web":
                 st.info("🌐 Respuesta usando evidencia local + web")
-            elif mode == "web_failure":
-                st.error("❌ Error en búsqueda web")
+            elif mode in ("web_failure", "web_none"):
+                st.error("❌ No se encontraron resultados web suficientes")
 
-            # fuentes
-            if "sources" in message and message["sources"]:
-                with st.expander(f"📚 Fuentes ({len(message['sources'])})", expanded=False):
-                    for i, src in enumerate(message["sources"], 1):
-                        st.markdown(f"""
-                        **{i}.** **{src.get('título', 'Sin título')}**  
-                        👤 {src.get('autor', 'Sin autor')} • 📰 *{src.get('diario', 'Sin medio')}* • 📅 {str(src.get('fecha',''))[:10]}  
-                        🔗 {src.get('url', src.get('doc_id',''))} • 📊 Score: {src.get('rrf_score','N/A')}
-                        """)
-            # briefs
+            # Mostrar fuentes guardadas
+            sources = message.get("sources") or []
+            if sources:
+                with st.expander(f"📚 Fuentes ({len(sources)})", expanded=False):
+                    for i, src in enumerate(sources, 1):
+                        if src.get("url"):  # fuente web
+                            st.markdown(f"""
+**{i}.** 🌐 **{src.get('titulo', 'Sin título')}**  
+🔗 {src.get('url', src.get('doc_id',''))} • 📊 Score: {src.get('rrf_score','N/A')}  
+📄 *{(src.get('snippet','') or src.get('texto',''))[:200]}...*
+""")
+                        else:  # fuente local
+                            fecha_str = str(src.get('fecha',''))[:10]
+                            st.markdown(f"""
+**{i}.** **{src.get('título', src.get('titulo','Sin título'))}**  
+👤 {src.get('autor', 'Sin autor')} • 📰 *{src.get('diario', 'Sin medio')}* • 📅 {fecha_str}  
+🔗 {src.get('vínculo', src.get('doc_id',''))}
+""")
+
+            # Mostrar briefs guardados
             if "briefs" in message and message["briefs"]:
                 with st.expander("🧠 Análisis estructurado", expanded=False):
                     briefs = message["briefs"]
-                    for key, title in [("por_año","📅 Por Año"),("por_medio","📰 Por Medio"),("por_autor","👤 Por Autor")]:
+                    for key, title in [
+                        ("por_año", "📅 Por Año"),
+                        ("por_medio", "📰 Por Medio"),
+                        ("por_autor", "👤 Por Autor"),
+                    ]:
                         st.markdown(f"#### {title}")
                         if briefs.get(key):
                             for item in briefs[key]:
@@ -80,7 +104,7 @@ for message in st.session_state.messages:
                         else:
                             st.info("No disponible")
 
-# Input del chat
+# ================= INPUT DEL CHAT =================
 if prompt := st.chat_input("Haz una pregunta sobre las columnas de opinión..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -95,65 +119,100 @@ if prompt := st.chat_input("Haz una pregunta sobre las columnas de opinión...")
                     allow_web=allow_web,
                     use_deep_reason=use_deep_reason
                 )
-                answer = result["answer"]
-                mode = result.get("mode","unknown")
-                hits = result.get("hits",[])
+                answer = result.get("answer", "")
+                mode = result.get("mode", "unknown")
+
+                # Fuentes y briefs
+                sources = result.get("hits") or result.get("web_results") or []
                 briefs = result.get("briefs")
 
-                # mostrar modo
-                if mode == "local":
-                    st.success("✅ Respuesta basada en evidencia local")
-                elif mode == "local_insufficient":
-                    st.warning("⚠️ Evidencia local insuficiente")
-                elif mode == "web":
-                    st.info("🌐 Respuesta usando evidencia local + web")
-                elif mode == "web_failure":
-                    st.error("❌ Error en búsqueda web")
+                # Mostrar respuesta inmediatamente
+                st.markdown(answer or "*(Sin respuesta)*")
 
-                st.markdown(answer)
+                # Mostrar fuentes inmediatamente
+                if sources:
+                    with st.expander(f"📚 Fuentes ({len(sources)})", expanded=False):
+                        for i, src in enumerate(sources, 1):
+                            if src.get("url"):
+                                st.markdown(f"""
+**{i}.** 🌐 **{src.get('titulo', 'Sin título')}**  
+🔗 {src.get('url', src.get('doc_id',''))} • 📊 Score: {src.get('rrf_score','N/A')}  
+📄 *{(src.get('snippet','') or src.get('texto',''))[:200]}...*
+""")
+                            else:
+                                fecha_str = str(src.get('fecha',''))[:10]
+                                st.markdown(f"""
+**{i}.** **{src.get('título', src.get('titulo','Sin título'))}**  
+👤 {src.get('autor', 'Sin autor')} • 📰 *{src.get('diario', 'Sin medio')}* • 📅 {fecha_str}  
+🔗 {src.get('vínculo', src.get('doc_id',''))}
+""")
 
-                msg = {"role":"assistant","content":answer,"mode_info":mode}
-                if hits: msg["sources"]=hits
-                if briefs: msg["briefs"]=briefs
+                # Mostrar briefs inmediatamente
+                if briefs:
+                    with st.expander("🧠 Análisis estructurado", expanded=False):
+                        for key, title in [
+                            ("por_año", "📅 Por Año"),
+                            ("por_medio", "📰 Por Medio"),
+                            ("por_autor", "👤 Por Autor"),
+                        ]:
+                            st.markdown(f"#### {title}")
+                            if briefs.get(key):
+                                for item in briefs[key]:
+                                    st.write(f"• {item}")
+                            else:
+                                st.info("No disponible")
+
+                # Guardar en historial
+                msg = {
+                    "role": "assistant",
+                    "content": answer or "*(Sin respuesta)*",
+                    "mode_info": mode,
+                }
+                if sources:
+                    msg["sources"] = sources
+                if briefs:
+                    msg["briefs"] = briefs
                 st.session_state.messages.append(msg)
 
             except Exception as e:
                 error_msg = f"❌ Error: {str(e)}"
                 st.error(error_msg)
-                st.session_state.messages.append({"role":"assistant","content":error_msg})
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
-# Ejemplos rápidos
+# ================= EJEMPLOS =================
 st.markdown("---")
-st.markdown("### 💡 Ejemplos")
+st.markdown("### 💡 Ejemplos de preguntas")
 ejemplos = [
     "¿Qué opinaban los columnistas sobre el acuerdo de paz en 2019?",
     "¿Cuáles eran las principales críticas a la educación pública?",
     "¿Qué se decía sobre las protestas estudiantiles en 2018?",
     "¿Cómo se abordó el tema de la corrupción en los medios?",
 ]
-cols = st.columns(len(ejemplos))
-for i,ej in enumerate(ejemplos):
-    if cols[i].button(f"💬 {ej}", key=f"ejemplo_{i}", use_container_width=True):
-        st.session_state.messages.append({"role":"user","content":ej})
-        st.rerun()
+for ej in ejemplos:
+    st.markdown(f"• {ej}")
 
-# Controles
+# ================= CONTROLES =================
 st.markdown("---")
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🗑️ Limpiar conversación", use_container_width=True):
-        st.session_state.messages=[]
+        st.session_state.messages = []
         st.rerun()
 with col2:
     if st.session_state.messages:
         conversation = "\n\n".join(
-            [("Usuario" if m["role"]=="user" else "Asistente")+": "+m["content"]
-             for m in st.session_state.messages]
+            [
+                ("Usuario" if m["role"] == "user" else "Asistente") + ": " + m["content"]
+                for m in st.session_state.messages
+            ]
         )
-        st.download_button("💾 Descargar chat",data=conversation,file_name="chat.txt")
+        st.download_button("💾 Descargar chat", data=conversation, file_name="chat.txt")
 
-# Footer
+# ================= FOOTER =================
 st.markdown("---")
-st.markdown("<div style='text-align:center;color:#666;'>"
-            "<small>🎓 Agente Gauteovan IA • RAG híbrido local+web • UdeA</small>"
-            "</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center;color:#666;'>"
+    "<small>🎓 Agente Gauteovan IA • RAG híbrido local+web </small>"
+    "</div>",
+    unsafe_allow_html=True,
+)

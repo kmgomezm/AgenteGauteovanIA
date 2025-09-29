@@ -64,7 +64,7 @@ for message in st.session_state.messages:
                 with st.expander(f"📚 Fuentes ({len(message['sources'])})", expanded=False):
                     for i, src in enumerate(message["sources"], 1):
                         st.markdown(f"""
-                        **{i}.** **{src.get('titulo', 'Sin título')}**  
+                        **{i}.** **{src.get('título', 'Sin título')}**  
                         👤 {src.get('autor', 'Sin autor')} • 📰 *{src.get('diario', 'Sin medio')}* • 📅 {str(src.get('fecha',''))[:10]}  
                         🔗 {src.get('url', src.get('doc_id',''))} • 📊 Score: {src.get('rrf_score','N/A')}
                         """)

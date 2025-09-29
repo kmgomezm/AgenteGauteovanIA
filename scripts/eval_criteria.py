@@ -64,6 +64,7 @@ def main():
 
     evaluators = {
         crit: load_evaluator("labeled_criteria", criteria={crit: desc}, llm=judge)
+        
         for crit, desc in CRITERIA.items()
     }
 
@@ -102,7 +103,12 @@ def main():
                     prediction=prediction,
                     reference=reference,  #   reference is used
                 )
-                score = graded.get("score", 0.0)
+
+                score = graded.get("score")
+                if score is None:
+                    score = 0.0
+                reason = graded.get("reasoning", "")
+
                 reason = graded.get("reasoning", "")
                 mlflow.log_metric(f"{crit}_score", float(score))
                 row[f"{crit}_score"] = score

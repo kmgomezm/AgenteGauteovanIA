@@ -2,6 +2,7 @@
 /spacyenv
 /venv
 /.vscode
+.vscode
 /vscode
 /.venv
 /mlruns

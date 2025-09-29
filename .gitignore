@@ -6,3 +6,4 @@
 /.venv
 /mlruns
 mlruns/720738256024743625/1a4b1cefc2404c48bd3e18f22b38c80b/meta.yaml
+.vscode/

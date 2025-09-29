@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 st.set_page_config(
-    page_title="Resultados Evaluación",
+    page_title="Resultados de Evaluación",
     page_icon="✅",
     layout="wide"
 )

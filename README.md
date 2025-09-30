@@ -40,11 +40,10 @@ graph TD
 1) **Instala dependencias**
 Asegurate que que el directorio de trabajo está en el directorio de trabajo `cd C:\path\to\AgenteGauteovanIA`, una vez ahí crea el entorno virtual:
 ```bash
-py -3.11 -m venv spacyenv
-.\spacyenv\Scripts\activate
+py -3.11 -m venv venv
+.\venv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
-python -m spacy download es_core_news_lg
 ```
 2) **Instala Ollama** y modelos locales (en otra terminal):
 ```bash
@@ -90,20 +89,25 @@ AgenteGauteovanIA/
 ├─ app/
 │  ├─ streamlit_app.py
 │  └─ pages/
-│     ├─ 1_Chat.py
-│     ├─ 2_Buscador_avanzado.py
-│     ├─ 3_Analisis_NLP.py
-│     └─ 4_Reportes_y_Graficas.py
+│     ├─ 1_Buscador_Semantico.py
+│     ├─ 2_Analisis_NLP.py
+│     ├─ 3_Reportes_y_Graficas.py
+│     └─ 4_Resultados_Evaluacion.py
 ├─ data/
-│  ├─ raw/Corpus_completo_revisado.xlsx      
-│  ├─ processed/chunks.parquet  
-│  └─ indexes/
-│      ├─ faiss.index          
-│      ├─ faiss_meta.parquet    
-│      └─ bm25.pkl              
+│  ├─ raw/
+│  │   └─ Corpus_completo_revisado.xlsx      
+│  ├─ processed/
+│  │   └─ chunks.parquet  
+│  ├─ indexes/
+│  │   ├─ faiss.index          
+│  │   ├─ faiss_meta.parquet    
+│  │   └─ bm25.pkl              
+│  ├─ evals/
+│  │   └─ eval_results.parquet
 ├─ scripts/
 │  ├─ build_index.py
-│  └─ eval_rag.py      
+│  ├─ eval_rag.py      
+│  └─ eval_criteria.py
 ├─ src/
 │  ├─ __init__.py
 │  ├─ briefings.py
@@ -123,11 +127,12 @@ AgenteGauteovanIA/
 ├─ tests/
 ├─ requirements.txt
 └─ README.md
+
 ```
 
 ## 🧠 Conceptos clave
 - **RAG híbrido**: FAISS (embeddings `intfloat/multilingual-e5-small`) + BM25 (rank-bm25). Fusión con **RRF**.
-- **Citas**: cada afirmación clave cita `[autor, diairo, fecha, título, doc_id]`.
+- **Citas**: cada afirmación clave cita `[autor, diario, fecha, título, doc_id]`.
 - **NLP**: spaCy (`es_core_news_lg`) para NER; BETO para sentimiento; zero-shot opcional para tópicos.
 
 ## 📌 Notas

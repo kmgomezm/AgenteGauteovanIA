@@ -2,9 +2,12 @@
 En los últimos años Colombia experimentó transformaciones sociales, políticas y económicas reflejadas en la opinión pública. En el proyecto _Humanidades digitales y esfera pública_ de la Universidad EAFIT se recopilaron ~13k columnas de opinión de periódicos colombianos (2018–2020).
 - **Problema**: Los métodos tradicionales de análisis de opinión son insuficientes para procesar grandes volúmenes de texto, extraer insights profundos con respuestas contextualizadas.
 - **Solución**: Un agente conversacional autónomo que combina:
-  - Análisis de sentimientos (detección de sarcasmo, emociones complejas).
-  - Generación de informes contextuales basados en RAG para evitar alucinaciones .
-  - Visualización interactiva de tendencias de opinión.
+  - Análisis de sentimientos sobre fragmentos de columnas de opinión.
+  - Reconocimiento de Entidades Nombradas (NER) para extraer actores, organizaciones y lugares clave.
+  - Clasificación zero-shot, que permite asignar temas a los fragmentos sin entrenamiento específico.
+  - Generación de respuestas e informes contextuales basados en RAG híbrido (FAISS + BM25 + LLM local Ollama), con citas directas a la evidencia para reducir alucinaciones.
+  - Visualización interactiva de tendencias de opinión, mediante reportes y gráficas dinámicas en Streamlit.
+    
 - **Público Objetivo**: Periodistas, investigadores sociales, entidades gubernamentales y organizaciones de la sociedad civil.
 
 # Agente Gauteovan IA

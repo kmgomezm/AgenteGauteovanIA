@@ -18,20 +18,21 @@ Ese proyecto propone la base para un agente conversacional multimodal, que integ
 ```mermaid
 graph TD
     A[Usuario] --> B[Interfaz Web: Streamlit]
-    B --> C[Backend: RAGHybridPipeline (LangChain + Ollama)]
+    B --> C[Backend RAGHybridPipeline]
     C --> D[Procesamiento de Consultas]
-    D --> E[Retrieval: HybridSearcher (FAISS + BM25)]
-    D --> F[LLM local: llama3.x (Ollama)]
+    D --> E[Retrieval: HybridSearcher FAISS+BM25]
+    D --> F[LLM local llama3.x Ollama]
     E --> G[Base de Conocimiento: Embeddings e5-small]
     D --> H{¿Evidencia suficiente?}
     H -- Sí --> I[Generación de Respuestas con RAG]
-    H -- No y web permitida --> J[Fallback: Búsqueda Web (DuckDuckGo)]
+    H -- No y web permitida --> J[Fallback Busqueda Web DuckDuckGo]
     J --> I
-    I --> K[Respuesta enriquecida (texto + análisis estructurado)]
-    K --> L[Visualizaciones y análisis NLP (NER, Sentimiento, Zero-shot)]
+    I --> K[Respuesta enriquecida: texto + análisis estructurado]
+    K --> L[Visualizaciones y análisis NLP]
     L --> M[Interfaz de usuario]
     K --> M
     M --> B
+
 ```
 
 

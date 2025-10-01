@@ -1,4 +1,7 @@
 # scripts/eval_rag.py
+
+# Se corre en terminal con: python -m scripts.eval_rag
+
 # Plantilla de evaluación rápida 
 from time import perf_counter
 from src.rag_chain import RAGHybridPipeline
